@@ -27,15 +27,15 @@ export const CheckoutPage: React.FC = () => {
   const cafe = cafes.find((c) => c.id === cafeId);
 
   // Form states
-  const [customerName, setCustomerName] = useState(user?.full_name || 'Aravind Sharma');
-  const [customerPhone, setCustomerPhone] = useState(user?.phone || '+91 98765 43210');
-  const [customerEmail, setCustomerEmail] = useState(user?.email || 'aravind@example.com');
+  const [customerName, setCustomerName] = useState(user?.full_name || '');
+  const [customerPhone, setCustomerPhone] = useState(user?.phone || '');
+  const [customerEmail, setCustomerEmail] = useState(user?.email || '');
 
   // Delivery / Dine-in details
-  const [deliveryAddress, setDeliveryAddress] = useState('Flat 402, Sea Green Apts, Hill Road, Bandra West');
-  const [deliveryCity, setDeliveryCity] = useState(cafe?.city || 'Mumbai');
-  const [deliveryPostalCode, setDeliveryPostalCode] = useState('400050');
-  const [dineInTable, setDineInTable] = useState('Table 4 (Window Seat)');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryCity, setDeliveryCity] = useState(cafe?.city || '');
+  const [deliveryPostalCode, setDeliveryPostalCode] = useState('');
+  const [dineInTable, setDineInTable] = useState('Table 1');
   const [notes, setNotes] = useState('');
 
   // Payment method

@@ -13,6 +13,7 @@ import {
   Coffee,
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { TableBookingModal } from '../components/modals/TableBookingModal';
 import { Badge } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
@@ -20,16 +21,19 @@ import { Cafe, Reservation } from '../types';
 
 export const ReservationsPage: React.FC = () => {
   const { reservations, cancelReservation, cafes } = useData();
+  const { user } = useAuth();
   const [selectedCafeForBooking, setSelectedCafeForBooking] = useState<Cafe | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
 
   const now = new Date().toISOString().split('T')[0];
 
-  const upcomingReservations = reservations.filter(
+  const userReservations = reservations.filter((r) => r.user_id === user?.id);
+
+  const upcomingReservations = userReservations.filter(
     (r) => r.reservation_date >= now && r.status !== 'cancelled'
   );
-  const pastReservations = reservations.filter(
+  const pastReservations = userReservations.filter(
     (r) => r.reservation_date < now || r.status === 'cancelled' || r.status === 'completed'
   );
 

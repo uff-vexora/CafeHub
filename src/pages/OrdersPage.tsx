@@ -9,7 +9,6 @@ import {
   Bike,
   Check,
   ChevronRight,
-  RefreshCw,
   MapPin,
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
@@ -27,26 +26,18 @@ const STATUS_STEPS: { key: OrderStatus; label: string; icon: React.ReactNode }[]
 ];
 
 export const OrdersPage: React.FC = () => {
-  const { orders, updateOrderStatus } = useData();
+  const { orders } = useData();
   const { user } = useAuth();
 
-  // If filtered by customer profile or show all
-  const userOrders = orders; // All current orders in mock store
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(orders[0]?.id || '');
+  // Filter orders strictly for the authenticated customer
+  const userOrders = orders.filter((o) => o.user_id === user?.id);
+  const [selectedOrderId, setSelectedOrderId] = useState<string>(userOrders[0]?.id || '');
 
-  const activeOrder = orders.find((o) => o.id === selectedOrderId) || orders[0];
+  const activeOrder = userOrders.find((o) => o.id === selectedOrderId) || userOrders[0];
 
   const getStepIndex = (status: OrderStatus) => {
     if (status === 'cancelled') return -1;
     return STATUS_STEPS.findIndex((s) => s.key === status);
-  };
-
-  const advanceNextStatus = (orderId: string, currentStatus: OrderStatus) => {
-    const sequence: OrderStatus[] = ['order_placed', 'confirmed', 'preparing', 'ready', 'completed'];
-    const idx = sequence.indexOf(currentStatus);
-    if (idx < sequence.length - 1) {
-      updateOrderStatus(orderId, sequence[idx + 1]);
-    }
   };
 
   if (userOrders.length === 0) {
@@ -158,20 +149,7 @@ export const OrdersPage: React.FC = () => {
                   <h3 className="font-serif font-bold text-xl text-espresso-950 mt-0.5">
                     Order #{activeOrder.order_number}
                   </h3>
-                  <p className="text-xs text-coffee-600">{activeOrder.cafe_name}</p>
                 </div>
-
-                {/* Simulate Progress Button (Super convenient for testing!) */}
-                {activeOrder.status !== 'completed' && activeOrder.status !== 'cancelled' && (
-                  <button
-                    onClick={() => advanceNextStatus(activeOrder.id, activeOrder.status)}
-                    className="px-3.5 py-1.5 rounded-xl bg-cream-100 hover:bg-cream-200 text-espresso-900 text-xs font-bold border border-cream-300 flex items-center gap-1.5 transition-colors self-start sm:self-auto"
-                    title="Simulate barista moving order to next stage"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-terracotta-600" />
-                    <span>Advance Status (Demo)</span>
-                  </button>
-                )}
               </div>
 
               {/* Progress Indicator */}

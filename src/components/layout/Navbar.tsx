@@ -9,8 +9,6 @@ import {
   User,
   Heart,
   Calendar,
-  Layers,
-  Shield,
   LogOut,
   Menu as MenuIcon,
   X,
@@ -27,13 +25,11 @@ import { Badge } from '../common/Badge';
 export const CITIES = ['All Cities', 'Mumbai', 'Bengaluru', 'New Delhi', 'Pune', 'Hyderabad', 'Jaipur'];
 
 interface NavbarProps {
-  onOpenAuthModal?: (mode: 'login' | 'signup') => void;
   selectedCity?: string;
   onSelectCity?: (city: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  onOpenAuthModal,
   selectedCity = 'All Cities',
   onSelectCity,
 }) => {
@@ -184,66 +180,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                       }`}
                     >
                       Orders
-                    </Link>
-                  </>
-                )}
-
-                {user.role === 'cafe_owner' && (
-                  <>
-                    <Link
-                      to="/owner"
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        isActive('/owner')
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-coffee-700 hover:text-espresso-900 hover:bg-white/50'
-                      }`}
-                    >
-                      Owner Portal
-                    </Link>
-                    <Link
-                      to="/cafes"
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        isActive('/cafes')
-                          ? 'bg-white text-espresso-950 shadow-sm'
-                          : 'text-coffee-700 hover:text-espresso-900 hover:bg-white/50'
-                      }`}
-                    >
-                      Explore Cafes
-                    </Link>
-                  </>
-                )}
-
-                {user.role === 'admin' && (
-                  <>
-                    <Link
-                      to="/admin"
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        isActive('/admin')
-                          ? 'bg-purple-600 text-white shadow-sm'
-                          : 'text-coffee-700 hover:text-espresso-900 hover:bg-white/50'
-                      }`}
-                    >
-                      Admin Dashboard
-                    </Link>
-                    <Link
-                      to="/owner"
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        isActive('/owner')
-                          ? 'bg-white text-espresso-950 shadow-sm'
-                          : 'text-coffee-700 hover:text-espresso-900 hover:bg-white/50'
-                      }`}
-                    >
-                      Owner Portal
-                    </Link>
-                    <Link
-                      to="/cafes"
-                      className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        isActive('/cafes')
-                          ? 'bg-white text-espresso-950 shadow-sm'
-                          : 'text-coffee-700 hover:text-espresso-900 hover:bg-white/50'
-                      }`}
-                    >
-                      Cafes
                     </Link>
                   </>
                 )}
@@ -450,33 +386,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                           </Link>
                         </div>
 
-                        {/* Role Dashboards */}
-                        {(user.role === 'cafe_owner' || user.role === 'admin') && (
-                          <div className="py-1 border-t border-cream-100">
-                            <Link
-                              to="/owner"
-                              onClick={() => setIsUserMenuOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 transition-colors"
-                            >
-                              <Layers className="w-4 h-4 text-amber-600" />
-                              Cafe Owner Dashboard
-                            </Link>
-                          </div>
-                        )}
-
-                        {user.role === 'admin' && (
-                          <div className="py-1">
-                            <Link
-                              to="/admin"
-                              onClick={() => setIsUserMenuOpen(false)}
-                              className="flex items-center gap-3 px-4 py-2 text-xs font-bold text-purple-700 hover:bg-purple-50 transition-colors"
-                            >
-                              <Shield className="w-4 h-4 text-purple-600" />
-                              Admin Dashboard
-                            </Link>
-                          </div>
-                        )}
-
                         {/* Logout */}
                         <div className="pt-1 border-t border-cream-100">
                           <button
@@ -587,39 +496,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 Track Orders
               </Link>
             </div>
-
-            {/* Conditional Role Portals in Mobile Menu */}
-            {(user?.role === 'cafe_owner' || user?.role === 'admin') && (
-              <div className="pt-2 border-t border-cream-200 flex items-center justify-between">
-                <Link
-                  to="/owner"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="text-xs font-bold text-amber-700 flex items-center gap-1.5"
-                >
-                  <Layers className="w-4 h-4" /> Owner Portal
-                </Link>
-                {user?.role === 'admin' && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="text-xs font-bold text-purple-700 flex items-center gap-1.5"
-                  >
-                    <Shield className="w-4 h-4" /> Admin Panel
-                  </Link>
-                )}
-              </div>
-            )}
           </div>
         )}
       </header>
 
-      {/* Mobile Sticky Bottom App Bar (Authenticated Users Only) */}
+      {/* Mobile Sticky Bottom App Bar (Authenticated Customers Only) */}
       {isAuthenticated && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-cream-200 px-4 py-2 flex items-center justify-around shadow-warm-lg">
           <Link
-            to={user?.role === 'customer' ? '/dashboard' : user?.role === 'cafe_owner' ? '/owner' : '/admin'}
+            to="/dashboard"
             className={`flex flex-col items-center gap-1 py-1 px-2 text-[10px] font-semibold transition-colors ${
-              isActive('/dashboard') || isActive('/owner') || isActive('/admin')
+              isActive('/dashboard')
                 ? 'text-terracotta-600'
                 : 'text-coffee-600 hover:text-espresso-900'
             }`}

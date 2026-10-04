@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { CartProvider } from './context/CartContext';
-import { Navbar } from './components/layout/Navbar';
-import { Footer } from './components/layout/Footer';
-import { AuthModal } from './components/modals/AuthModal';
 
-// Pages
+// Layouts
+import { CustomerLayout } from './components/layout/CustomerLayout';
+import { OwnerLayout } from './components/layout/OwnerLayout';
+import { AdminLayout } from './components/layout/AdminLayout';
+
+// Public & Auth Pages
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
+
+// Customer Pages
+import { CustomerDashboard } from './pages/CustomerDashboard';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { CafeDetailPage } from './pages/CafeDetailPage';
 import { CartPage } from './pages/CartPage';
@@ -15,11 +24,8 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ReservationsPage } from './pages/ReservationsPage';
 import { AccountPage } from './pages/AccountPage';
-import { CustomerDashboard } from './pages/CustomerDashboard';
-import { LoginPage } from './pages/LoginPage';
-import { SignupPage } from './pages/SignupPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { UnauthorizedPage } from './pages/UnauthorizedPage';
+
+// Owner & Admin Dashboards
 import { OwnerDashboard } from './pages/owner/OwnerDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UserRole } from './types';
@@ -34,7 +40,7 @@ const RootRedirect: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-cream-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terracotta-600"></div>
       </div>
     );
@@ -47,9 +53,9 @@ const RootRedirect: React.FC = () => {
   return <Navigate to={getRedirectPathForRole(user.role)} replace />;
 };
 
-// Strict Protected Route Component
+// Strict Protected Route Wrapper
 const ProtectedRoute: React.FC<{
-  children: React.ReactNode;
+  children?: React.ReactNode;
   allowedRoles?: UserRole[];
 }> = ({ children, allowedRoles }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -57,13 +63,13 @@ const ProtectedRoute: React.FC<{
 
   if (isLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-cream-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terracotta-600"></div>
       </div>
     );
   }
 
-  // 1. Unauthenticated users -> Redirect immediately to /login with preserved redirect
+  // 1. Unauthenticated users -> Redirect immediately to /login with preserved redirect target
   if (!isAuthenticated || !user) {
     const redirectUrl = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
     return <Navigate to={redirectUrl} replace />;
@@ -79,157 +85,89 @@ const ProtectedRoute: React.FC<{
     );
   }
 
-  return <>{children}</>;
+  return children ? <>{children}</> : <Outlet />;
 };
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [selectedCity, setSelectedCity] = useState('All Cities');
 
-  const handleOpenAuth = (mode: 'login' | 'signup') => {
-    setAuthMode(mode);
-    setAuthModalOpen(true);
-  };
-
   return (
-    <div className="min-h-screen flex flex-col bg-[#FDFBF7] text-[#1E140D]">
-      <Navbar
-        onOpenAuthModal={handleOpenAuth}
-        selectedCity={selectedCity}
-        onSelectCity={setSelectedCity}
-      />
+    <Routes>
+      {/* Root Entrypoint: Strict Login-First */}
+      <Route path="/" element={<RootRedirect />} />
 
-      <main className="flex-1">
-        <Routes>
-          {/* Root Entrypoint: Strict Login-First */}
-          <Route path="/" element={<RootRedirect />} />
+      {/* Strictly Public Authentication & Error Pages */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          {/* Strictly Public Authentication Pages */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      {/* ============================================================== */}
+      {/* 1. CUSTOMER APPLICATION EXPERIENCE                             */}
+      {/* Strictly scoped to 'customer' role. Zero Owner/Admin leakage. */}
+      {/* ============================================================== */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['customer']}>
+            <CustomerLayout selectedCity={selectedCity} onSelectCity={setSelectedCity} />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/dashboard" element={<CustomerDashboard />} />
+        <Route path="/cafes" element={<DiscoveryPage />} />
+        <Route path="/cafes/:id" element={<CafeDetailPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/orders" element={<OrdersPage />} />
+        <Route path="/reservations" element={<ReservationsPage />} />
+        <Route path="/account" element={<AccountPage />} />
+      </Route>
 
-          {/* Role-Specific Dashboards (Strictly Protected) */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={['customer', 'admin']}>
-                <CustomerDashboard />
-              </ProtectedRoute>
-            }
-          />
+      {/* ============================================================== */}
+      {/* 2. CAFE OWNER APPLICATION EXPERIENCE                           */}
+      {/* Strictly scoped to 'cafe_owner' role. Zero Customer cart.     */}
+      {/* ============================================================== */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['cafe_owner']}>
+            <OwnerLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/owner" element={<OwnerDashboard defaultTab="overview" />} />
+        <Route path="/owner/orders" element={<OwnerDashboard defaultTab="orders" />} />
+        <Route path="/owner/reservations" element={<OwnerDashboard defaultTab="reservations" />} />
+        <Route path="/owner/menu" element={<OwnerDashboard defaultTab="menu" />} />
+        <Route path="/owner/profile" element={<OwnerDashboard defaultTab="cafe" />} />
+        <Route path="/owner/reviews" element={<OwnerDashboard defaultTab="reviews" />} />
+        <Route path="/owner/analytics" element={<OwnerDashboard defaultTab="analytics" />} />
+        <Route path="/owner/settings" element={<OwnerDashboard defaultTab="settings" />} />
+      </Route>
 
-          <Route
-            path="/owner/*"
-            element={
-              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
-                <OwnerDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner"
-            element={
-              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
-                <OwnerDashboard />
-              </ProtectedRoute>
-            }
-          />
+      {/* ============================================================== */}
+      {/* 3. PLATFORM ADMIN APPLICATION EXPERIENCE                       */}
+      {/* Strictly scoped to 'admin' role. Zero Consumer UI.             */}
+      {/* ============================================================== */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/admin" element={<AdminDashboard defaultTab="metrics" />} />
+        <Route path="/admin/cafes" element={<AdminDashboard defaultTab="cafes" />} />
+        <Route path="/admin/users" element={<AdminDashboard defaultTab="users" />} />
+        <Route path="/admin/orders" element={<AdminDashboard defaultTab="orders" />} />
+        <Route path="/admin/reservations" element={<AdminDashboard defaultTab="reservations" />} />
+        <Route path="/admin/reviews" element={<AdminDashboard defaultTab="reviews" />} />
+        <Route path="/admin/reports" element={<AdminDashboard defaultTab="reports" />} />
+        <Route path="/admin/settings" element={<AdminDashboard defaultTab="settings" />} />
+      </Route>
 
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Protected Customer Features */}
-          <Route
-            path="/account"
-            element={
-              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
-                <AccountPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/orders"
-            element={
-              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
-                <OrdersPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/reservations"
-            element={
-              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
-                <ReservationsPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Protected Cafe Marketplace & Ordering Features */}
-          <Route
-            path="/cafes"
-            element={
-              <ProtectedRoute>
-                <DiscoveryPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/cafes/:id"
-            element={
-              <ProtectedRoute>
-                <CafeDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/cart"
-            element={
-              <ProtectedRoute>
-                <CartPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/checkout"
-            element={
-              <ProtectedRoute>
-                <CheckoutPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Catch-all redirect -> triggers RootRedirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-
-      {/* Show footer only when authenticated */}
-      {isAuthenticated && <Footer />}
-
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authMode}
-      />
-    </div>
+      {/* Catch-all route -> Root intelligent redirect */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 };
 

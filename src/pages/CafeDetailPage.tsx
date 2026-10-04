@@ -63,25 +63,11 @@ export const CafeDetailPage: React.FC = () => {
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const favorite = cafe ? isFavorite(cafe.id) : false;
+  const cafeReviews = cafe ? reviews.filter((r) => r.cafe_id === cafe.id) : [];
 
-  if (!cafe) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-20">
-        <EmptyState
-          title="Cafe Not Found"
-          description="The cafe you are looking for does not exist or may have been relocated."
-          actionText="Explore Other Cafes"
-          actionLink="/cafes"
-        />
-      </div>
-    );
-  }
-
-  const favorite = isFavorite(cafe.id);
-  const cafeReviews = reviews.filter((r) => r.cafe_id === cafe.id);
-
-  // Menu items for this cafe
-  const cafeMenuItems = menuItems.filter((item) => item.cafe_id === cafe.id || item.cafe_id === 'cafe-1');
+  // Menu items for this cafe (strictly scoped to this cafe)
+  const cafeMenuItems = cafe ? menuItems.filter((item) => item.cafe_id === cafe.id) : [];
 
   // Categories present in this cafe's menu
   const menuCategories = ['All', ...Array.from(new Set(cafeMenuItems.map((item) => item.category_name)))];
@@ -101,6 +87,19 @@ export const CafeDetailPage: React.FC = () => {
       return true;
     });
   }, [cafeMenuItems, selectedMenuCategory, vegOnly, menuSearch]);
+
+  if (!cafe) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20">
+        <EmptyState
+          title="Cafe Not Found"
+          description="The cafe you are looking for does not exist or may have been relocated."
+          actionText="Explore Other Cafes"
+          actionLink="/cafes"
+        />
+      </div>
+    );
+  }
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);

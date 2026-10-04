@@ -33,17 +33,18 @@ interface AuthContextType {
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password?: string) => Promise<{ success: boolean; role?: UserRole; error?: string }>;
   signup: (
     fullName: string,
     email: string,
     password?: string,
     role?: UserRole,
     phone?: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; role?: UserRole; error?: string }>;
   logout: () => void;
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
+  updateUserRoleAsAdmin: (userId: string, newRole: UserRole) => Promise<{ success: boolean; error?: string }>;
   getRedirectPathForRole: (role: UserRole) => string;
 }
 
@@ -153,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (
     email: string,
     password = 'password123'
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
 
@@ -181,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setUser(profile as UserProfile);
-        return { success: true };
+        return { success: true, role: profile.role as UserRole };
       }
 
       // 2. Verified Local Mock Auth Flow (Strict Credential & Role Matching)
@@ -221,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         created_at: foundProfile.created_at,
       });
 
-      return { success: true };
+      return { success: true, role: foundProfile.role };
     } catch (err: any) {
       return { success: false, error: err?.message || 'An unexpected error occurred during login.' };
     } finally {
@@ -235,7 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     password = 'password123',
     requestedRole: UserRole = 'customer',
     phone?: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; role?: UserRole; error?: string }> => {
     setIsLoading(true);
     const cleanEmail = email.trim().toLowerCase();
 
@@ -383,6 +384,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
+  const updateUserRoleAsAdmin = async (userId: string, newRole: UserRole): Promise<{ success: boolean; error?: string }> => {
+    if (!user || user.role !== 'admin') {
+      return { success: false, error: 'Access Denied: Only administrators can modify roles.' };
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ role: newRole })
+          .eq('id', userId);
+        if (error) {
+          console.error('Supabase admin role update error:', error);
+          return { success: false, error: error.message };
+        }
+      } catch (err: any) {
+        return { success: false, error: err?.message };
+      }
+    }
+
+    // Local / Offline storage persistence
+    const savedUsersJson = localStorage.getItem(REGISTERED_USERS_KEY);
+    const registeredUsers: (UserProfile & { password?: string })[] = savedUsersJson
+      ? JSON.parse(savedUsersJson)
+      : [];
+
+    const regIndex = registeredUsers.findIndex((u) => u.id === userId);
+    if (regIndex > -1) {
+      registeredUsers[regIndex].role = newRole;
+      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(registeredUsers));
+    } else {
+      const seed = SEED_PROFILES.find((s) => s.id === userId);
+      if (seed) {
+        registeredUsers.push({ ...seed, role: newRole });
+        localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(registeredUsers));
+      }
+    }
+
+    // If admin modified their own role
+    if (user.id === userId) {
+      setUser({ ...user, role: newRole });
+    }
+
+    return { success: true };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -395,6 +442,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         resetPassword,
         updateProfile,
+        updateUserRoleAsAdmin,
         getRedirectPathForRole,
       }}
     >

@@ -37,8 +37,7 @@ export const LoginPage: React.FC = () => {
         if (redirectParam && redirectParam.startsWith('/')) {
           navigate(redirectParam, { replace: true });
         } else {
-          // Note: State might take a tick, but login returns server-verified role
-          const target = redirectParam || '/dashboard';
+          const target = getRedirectPathForRole(res.role || 'customer');
           navigate(target, { replace: true });
         }
       } else {

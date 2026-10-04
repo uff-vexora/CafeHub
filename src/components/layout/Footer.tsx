@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Coffee, Heart, Mail, MapPin, Phone, ShieldCheck, Sparkles, ArrowRight } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const Footer: React.FC = () => {
+  const { user, getRedirectPathForRole } = useAuth();
   const [emailInput, setEmailInput] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+
+  const homeLink = user ? getRedirectPathForRole(user.role) : '/login';
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +63,7 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 py-12">
           {/* Col 1: Brand & Newsletter */}
           <div className="lg:col-span-2 space-y-4">
-            <Link to="/" className="flex items-center gap-2.5">
+            <Link to={homeLink} className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-terracotta-500 to-terracotta-600 flex items-center justify-center text-white shadow-warm">
                 <Coffee className="w-5 h-5" />
               </div>
