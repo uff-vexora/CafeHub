@@ -42,6 +42,7 @@ interface AuthContextType {
     phone?: string
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<boolean>;
   getRedirectPathForRole: (role: UserRole) => string;
 }
@@ -145,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return '/owner';
       case 'customer':
       default:
-        return '/account';
+        return '/dashboard';
     }
   };
 
@@ -323,6 +324,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     localStorage.removeItem(AUTH_STORAGE_KEY);
     setUser(null);
+    try {
+      window.history.replaceState(null, '', '/login');
+    } catch (_) {}
+  };
+
+  const resetPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+        if (error) {
+          return { success: false, error: error.message };
+        }
+        return { success: true };
+      }
+
+      // Local / Offline fallback
+      const savedUsersJson = localStorage.getItem(REGISTERED_USERS_KEY);
+      const registeredUsers: UserProfile[] = savedUsersJson ? JSON.parse(savedUsersJson) : [];
+      const allProfiles = [...registeredUsers, ...SEED_PROFILES];
+      const exists = allProfiles.some((p) => p.email.toLowerCase() === cleanEmail);
+
+      if (exists) {
+        return { success: true };
+      }
+      return { success: false, error: 'No account found with this email address.' };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Password reset request failed.' };
+    }
   };
 
   const updateProfile = async (updates: Partial<UserProfile>): Promise<boolean> => {
@@ -363,6 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         signup,
         logout,
+        resetPassword,
         updateProfile,
         getRedirectPathForRole,
       }}

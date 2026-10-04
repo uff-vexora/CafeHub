@@ -8,7 +8,6 @@ import { Footer } from './components/layout/Footer';
 import { AuthModal } from './components/modals/AuthModal';
 
 // Pages
-import { HomePage } from './pages/HomePage';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { CafeDetailPage } from './pages/CafeDetailPage';
 import { CartPage } from './pages/CartPage';
@@ -16,15 +15,39 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ReservationsPage } from './pages/ReservationsPage';
 import { AccountPage } from './pages/AccountPage';
+import { CustomerDashboard } from './pages/CustomerDashboard';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { UnauthorizedPage } from './pages/UnauthorizedPage';
-import { DashboardRedirect } from './pages/DashboardRedirect';
 import { OwnerDashboard } from './pages/owner/OwnerDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UserRole } from './types';
 
-// Protected Route Component
+// Root Intelligent Redirector: STRICT LOGIN FIRST
+// Logged-out visitor -> /login
+// Customer -> /dashboard
+// Cafe Owner -> /owner
+// Admin -> /admin
+const RootRedirect: React.FC = () => {
+  const { user, isAuthenticated, isLoading, getRedirectPathForRole } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terracotta-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={getRedirectPathForRole(user.role)} replace />;
+};
+
+// Strict Protected Route Component
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
   allowedRoles?: UserRole[];
@@ -40,7 +63,7 @@ const ProtectedRoute: React.FC<{
     );
   }
 
-  // 1. Unauthenticated users -> Redirect to /login with redirect query param
+  // 1. Unauthenticated users -> Redirect immediately to /login with preserved redirect
   if (!isAuthenticated || !user) {
     const redirectUrl = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
     return <Navigate to={redirectUrl} replace />;
@@ -60,6 +83,7 @@ const ProtectedRoute: React.FC<{
 };
 
 const AppContent: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [selectedCity, setSelectedCity] = useState('All Cities');
@@ -79,24 +103,65 @@ const AppContent: React.FC = () => {
 
       <main className="flex-1">
         <Routes>
-          {/* Public Routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/cafes" element={<DiscoveryPage />} />
-          <Route path="/cafes/:id" element={<CafeDetailPage />} />
-          <Route path="/cart" element={<CartPage />} />
+          {/* Root Entrypoint: Strict Login-First */}
+          <Route path="/" element={<RootRedirect />} />
+
+          {/* Strictly Public Authentication Pages */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-          {/* Intelligent Dashboard Router */}
-          <Route path="/dashboard" element={<DashboardRedirect />} />
-
-          {/* Protected Routes: Require Authentication */}
+          {/* Role-Specific Dashboards (Strictly Protected) */}
           <Route
-            path="/checkout"
+            path="/dashboard"
             element={
-              <ProtectedRoute>
-                <CheckoutPage />
+              <ProtectedRoute allowedRoles={['customer', 'admin']}>
+                <CustomerDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/owner/*"
+            element={
+              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
+                <OwnerDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/owner"
+            element={
+              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
+                <OwnerDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected Customer Features */}
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
+                <AccountPage />
               </ProtectedRoute>
             }
           />
@@ -116,57 +181,48 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* Protected Cafe Marketplace & Ordering Features */}
           <Route
-            path="/account"
+            path="/cafes"
             element={
-              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
-                <AccountPage />
+              <ProtectedRoute>
+                <DiscoveryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cafes/:id"
+            element={
+              <ProtectedRoute>
+                <CafeDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/cart"
+            element={
+              <ProtectedRoute>
+                <CartPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <CheckoutPage />
               </ProtectedRoute>
             }
           />
 
-          {/* Role-Restricted: Cafe Owner & Admin only */}
-          <Route
-            path="/owner/*"
-            element={
-              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
-                <OwnerDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/owner"
-            element={
-              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
-                <OwnerDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Role-Restricted: Super Admin ONLY */}
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Catch-all redirect */}
+          {/* Catch-all redirect -> triggers RootRedirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      <Footer />
+      {/* Show footer only when authenticated */}
+      {isAuthenticated && <Footer />}
 
       <AuthModal
         isOpen={authModalOpen}
