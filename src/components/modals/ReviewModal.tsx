@@ -30,11 +30,9 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
     if (!comment.trim()) return;
 
     addReview({
-      user_id: user?.id || `user-guest-${Date.now()}`,
       cafe_id: cafeId,
       rating,
       comment: comment.trim(),
-      user_name: reviewerName.trim() || user?.full_name || 'Verified Diner',
       user_avatar: user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
     });
 

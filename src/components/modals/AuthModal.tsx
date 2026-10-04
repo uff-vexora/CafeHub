@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Coffee, Lock, Mail, User, Phone, Check, Shield, Layers } from 'lucide-react';
+import { Coffee, Lock, Mail, User, Phone, Shield } from 'lucide-react';
 import { Modal } from '../common/Modal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, DEMO_CREDENTIALS } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 
 interface AuthModalProps {
@@ -15,10 +15,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   initialMode = 'login',
 }) => {
-  const { login, signup, switchDemoRole } = useAuth();
+  const { login, signup } = useAuth();
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('password123');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('customer');
@@ -32,22 +32,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       if (mode === 'login') {
-        const success = await login(email, selectedRole);
-        if (success) onClose();
+        const res = await login(email, password);
+        if (res.success) {
+          onClose();
+        } else {
+          setError(res.error || 'Authentication failed. Please verify credentials.');
+        }
       } else {
-        const success = await signup(fullName, email, selectedRole, phone);
-        if (success) onClose();
+        const res = await signup(fullName, email, password, selectedRole, phone);
+        if (res.success) {
+          onClose();
+        } else {
+          setError(res.error || 'Registration failed. Please try again.');
+        }
       }
     } catch (err: any) {
-      setError(err?.message || 'Authentication failed. Please try again.');
+      setError(err?.message || 'Authentication error. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleQuickLogin = (role: UserRole) => {
-    switchDemoRole(role);
-    onClose();
+  const handleQuickFill = (role: UserRole) => {
+    const cred = DEMO_CREDENTIALS.find((d) => d.role === role);
+    if (cred) {
+      setEmail(cred.email);
+      setPassword(cred.password);
+      setError('');
+    }
   };
 
   return (
@@ -68,30 +80,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </p>
         </div>
 
-        {/* Quick Demo Logins Bar (Super helpful for grading & immediate testing!) */}
+        {/* Quick Demo Logins Bar */}
         <div className="p-3 bg-cream-100 rounded-2xl border border-cream-300">
           <div className="text-[11px] font-bold text-espresso-800 uppercase tracking-wider text-center mb-2">
-            ⚡ Quick Demo Logins
+            ⚡ Quick Demo Logins (Click to autofill)
           </div>
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => handleQuickLogin('customer')}
-              className="py-1.5 px-2 bg-white hover:bg-terracotta-50 text-espresso-900 border border-cream-200 rounded-xl text-xs font-semibold shadow-sm text-center transition-colors"
+              onClick={() => handleQuickFill('customer')}
+              className={`py-1.5 px-2 rounded-xl text-xs font-semibold shadow-xs text-center transition-colors border ${
+                email === 'aravind@example.com'
+                  ? 'bg-espresso-900 text-white border-espresso-900'
+                  : 'bg-white hover:bg-terracotta-50 text-espresso-900 border-cream-200'
+              }`}
             >
               Customer
             </button>
             <button
               type="button"
-              onClick={() => handleQuickLogin('cafe_owner')}
-              className="py-1.5 px-2 bg-white hover:bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-semibold shadow-sm text-center transition-colors"
+              onClick={() => handleQuickFill('cafe_owner')}
+              className={`py-1.5 px-2 rounded-xl text-xs font-semibold shadow-xs text-center transition-colors border ${
+                email === 'owner@subkocoffee.com'
+                  ? 'bg-amber-600 text-white border-amber-600'
+                  : 'bg-white hover:bg-amber-50 text-amber-900 border-amber-200'
+              }`}
             >
               Cafe Owner
             </button>
             <button
               type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className="py-1.5 px-2 bg-white hover:bg-purple-50 text-purple-900 border border-purple-200 rounded-xl text-xs font-semibold shadow-sm text-center transition-colors"
+              onClick={() => handleQuickFill('admin')}
+              className={`py-1.5 px-2 rounded-xl text-xs font-semibold shadow-xs text-center transition-colors border ${
+                email === 'admin@cafehub.in'
+                  ? 'bg-purple-600 text-white border-purple-600'
+                  : 'bg-white hover:bg-purple-50 text-purple-900 border-purple-200'
+              }`}
             >
               Admin
             </button>

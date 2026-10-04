@@ -53,8 +53,7 @@ export const CheckoutPage: React.FC = () => {
     setIsProcessing(true);
 
     setTimeout(() => {
-      const newOrder = createOrder({
-        user_id: user?.id || 'guest-user',
+      const res = createOrder({
         cafe_id: cafeId || 'cafe-1',
         cafe_name: cafeName || 'Specialty Cafe',
         cafe_image: cafe?.cover_image || 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=400&q=80',
@@ -86,7 +85,9 @@ export const CheckoutPage: React.FC = () => {
         estimated_time: orderType === 'delivery' ? '30-40 mins' : orderType === 'pickup' ? '15 mins' : '10-15 mins',
       });
 
-      setConfirmedOrder(newOrder);
+      if (res.success && res.order) {
+        setConfirmedOrder(res.order);
+      }
       clearCart();
       setIsProcessing(false);
 

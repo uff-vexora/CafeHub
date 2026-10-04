@@ -38,7 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   selectedCity = 'All Cities',
   onSelectCity,
 }) => {
-  const { user, isAuthenticated, logout, switchDemoRole } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { itemCount } = useCart();
   const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
   const location = useLocation();
@@ -48,7 +48,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showDemoRoleBar, setShowDemoRoleBar] = useState(true);
 
   const cityDropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -80,57 +79,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      {/* Demo Role Switcher Toolbar Banner */}
-      {showDemoRoleBar && (
-        <div className="bg-espresso-950 text-cream-200 text-xs py-1.5 px-4 flex flex-wrap items-center justify-between border-b border-espresso-800 z-50">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-medium text-cream-100">Live Demo Role Switcher:</span>
-            <span className="text-coffee-300 hidden sm:inline">
-              Test different user workflows instantly
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={() => switchDemoRole('customer')}
-              className={`px-2.5 py-0.5 rounded-full transition-all text-xs font-medium ${
-                user?.role === 'customer'
-                  ? 'bg-terracotta-600 text-white shadow-sm'
-                  : 'bg-espresso-850 hover:bg-espresso-800 text-cream-300'
-              }`}
-            >
-              Customer
-            </button>
-            <button
-              onClick={() => switchDemoRole('cafe_owner')}
-              className={`px-2.5 py-0.5 rounded-full transition-all text-xs font-medium ${
-                user?.role === 'cafe_owner'
-                  ? 'bg-amber-600 text-white shadow-sm'
-                  : 'bg-espresso-850 hover:bg-espresso-800 text-cream-300'
-              }`}
-            >
-              Cafe Owner
-            </button>
-            <button
-              onClick={() => switchDemoRole('admin')}
-              className={`px-2.5 py-0.5 rounded-full transition-all text-xs font-medium ${
-                user?.role === 'admin'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-espresso-850 hover:bg-espresso-800 text-cream-300'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setShowDemoRoleBar(false)}
-              className="text-coffee-400 hover:text-white p-0.5 ml-1"
-              title="Hide switcher"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main Navbar */}
       <header className="sticky top-0 z-40 glass-nav border-b border-cream-200/80 transition-all">
@@ -468,18 +416,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onOpenAuthModal?.('login')}
+                  <Link
+                    to="/login"
                     className="px-3.5 py-2 text-xs font-semibold text-espresso-900 hover:text-terracotta-600 transition-colors"
                   >
                     Login
-                  </button>
-                  <button
-                    onClick={() => onOpenAuthModal?.('signup')}
+                  </Link>
+                  <Link
+                    to="/signup"
                     className="px-4 py-2 bg-espresso-900 hover:bg-espresso-800 text-white text-xs font-semibold rounded-full shadow-warm transition-all active:scale-95"
                   >
                     Sign Up
-                  </button>
+                  </Link>
                 </div>
               )}
 
@@ -559,22 +507,46 @@ export const Navbar: React.FC<NavbarProps> = ({
               </Link>
             </div>
 
-            <div className="pt-2 border-t border-cream-200 flex items-center justify-between">
-              <Link
-                to="/owner"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-xs font-bold text-amber-700 flex items-center gap-1.5"
-              >
-                <Layers className="w-4 h-4" /> Owner Portal
-              </Link>
-              <Link
-                to="/admin"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="text-xs font-bold text-purple-700 flex items-center gap-1.5"
-              >
-                <Shield className="w-4 h-4" /> Admin Panel
-              </Link>
-            </div>
+            {/* Conditional Role Portals in Mobile Menu */}
+            {(user?.role === 'cafe_owner' || user?.role === 'admin') && (
+              <div className="pt-2 border-t border-cream-200 flex items-center justify-between">
+                <Link
+                  to="/owner"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="text-xs font-bold text-amber-700 flex items-center gap-1.5"
+                >
+                  <Layers className="w-4 h-4" /> Owner Portal
+                </Link>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="text-xs font-bold text-purple-700 flex items-center gap-1.5"
+                  >
+                    <Shield className="w-4 h-4" /> Admin Panel
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {!isAuthenticated && (
+              <div className="pt-2 border-t border-cream-200 grid grid-cols-2 gap-2">
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="py-2.5 px-3 text-center text-xs font-bold text-espresso-900 bg-cream-100 hover:bg-cream-200 rounded-xl"
+                >
+                  Log In
+                </Link>
+                <Link
+                  to="/signup"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="py-2.5 px-3 text-center text-xs font-bold text-white bg-terracotta-600 hover:bg-terracotta-700 rounded-xl shadow-warm"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </header>

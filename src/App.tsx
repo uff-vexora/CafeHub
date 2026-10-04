@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { CartProvider } from './context/CartContext';
@@ -16,33 +16,43 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ReservationsPage } from './pages/ReservationsPage';
 import { AccountPage } from './pages/AccountPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { UnauthorizedPage } from './pages/UnauthorizedPage';
+import { DashboardRedirect } from './pages/DashboardRedirect';
 import { OwnerDashboard } from './pages/owner/OwnerDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { UserRole } from './types';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
-  allowedRoles?: ('customer' | 'cafe_owner' | 'admin')[];
-  onOpenAuth: (mode: 'login' | 'signup') => void;
-}> = ({ children, allowedRoles, onOpenAuth }) => {
-  const { user, isAuthenticated } = useAuth();
+  allowedRoles?: UserRole[];
+}> = ({ children, allowedRoles }) => {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
-  if (!isAuthenticated || !user) {
-    onOpenAuth('login');
-    return <Navigate to="/" replace />;
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terracotta-600"></div>
+      </div>
+    );
   }
 
+  // 1. Unauthenticated users -> Redirect to /login with redirect query param
+  if (!isAuthenticated || !user) {
+    const redirectUrl = `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+    return <Navigate to={redirectUrl} replace />;
+  }
+
+  // 2. Role authorization check -> Render 403 Forbidden UnauthorizedPage
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return (
-      <div className="max-w-md mx-auto my-20 p-8 bg-white rounded-3xl border border-cream-200 text-center space-y-4 shadow-warm">
-        <h3 className="font-serif font-bold text-xl text-espresso-950">Access Restricted</h3>
-        <p className="text-xs text-coffee-600">
-          This dashboard requires <strong>{allowedRoles.join(' or ')}</strong> privileges. Your current role is <strong>{user.role}</strong>.
-        </p>
-        <p className="text-xs text-coffee-500">
-          Tip: Use the demo role switcher at the top of the page to switch roles instantly.
-        </p>
-      </div>
+      <UnauthorizedPage
+        requiredRole={allowedRoles.join(' or ')}
+        attemptedPath={location.pathname}
+      />
     );
   }
 
@@ -69,37 +79,89 @@ const AppContent: React.FC = () => {
 
       <main className="flex-1">
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
           <Route path="/cafes" element={<DiscoveryPage />} />
           <Route path="/cafes/:id" element={<CafeDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/reservations" element={<ReservationsPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+          {/* Intelligent Dashboard Router */}
+          <Route path="/dashboard" element={<DashboardRedirect />} />
+
+          {/* Protected Routes: Require Authentication */}
+          <Route
+            path="/checkout"
+            element={
+              <ProtectedRoute>
+                <CheckoutPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
+                <OrdersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reservations"
+            element={
+              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
+                <ReservationsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/account"
             element={
-              <ProtectedRoute onOpenAuth={handleOpenAuth}>
+              <ProtectedRoute allowedRoles={['customer', 'cafe_owner', 'admin']}>
                 <AccountPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Role-Restricted: Cafe Owner & Admin only */}
+          <Route
+            path="/owner/*"
+            element={
+              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
+                <OwnerDashboard />
               </ProtectedRoute>
             }
           />
           <Route
             path="/owner"
             element={
-              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']} onOpenAuth={handleOpenAuth}>
+              <ProtectedRoute allowedRoles={['cafe_owner', 'admin']}>
                 <OwnerDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Role-Restricted: Super Admin ONLY */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />
           <Route
             path="/admin"
             element={
-              <ProtectedRoute allowedRoles={['admin']} onOpenAuth={handleOpenAuth}>
+              <ProtectedRoute allowedRoles={['admin']}>
                 <AdminDashboard />
               </ProtectedRoute>
             }
           />
+
+          {/* Catch-all redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

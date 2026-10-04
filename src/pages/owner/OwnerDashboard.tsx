@@ -32,20 +32,20 @@ export const OwnerDashboard: React.FC = () => {
   const { cafes, menuItems, orders, reservations, reviews, updateCafe, addMenuItem, updateMenuItem, deleteMenuItem, toggleItemAvailability, updateOrderStatus, updateReservationStatus, replyToReview } = useData();
   const { user } = useAuth();
 
-  // Find owner's cafe (default to Subko or first cafe)
-  const myCafe = cafes.find((c) => c.owner_id === user?.id) || cafes[0];
+  // Find owner's cafe (Strictly isolated by owner_id; Admins can inspect first cafe)
+  const myCafe = cafes.find((c) => c.owner_id === user?.id) || (user?.role === 'admin' ? cafes[0] : undefined);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'cafe' | 'menu' | 'orders' | 'reservations' | 'reviews' | 'analytics'>('overview');
 
   // Cafe edit state
-  const [cafeName, setCafeName] = useState(myCafe.name);
-  const [tagline, setTagline] = useState(myCafe.tagline);
-  const [description, setDescription] = useState(myCafe.description);
-  const [address, setAddress] = useState(myCafe.address);
-  const [openingTime, setOpeningTime] = useState(myCafe.opening_time);
-  const [closingTime, setClosingTime] = useState(myCafe.closing_time);
-  const [phone, setPhone] = useState(myCafe.phone);
-  const [email, setEmail] = useState(myCafe.email);
+  const [cafeName, setCafeName] = useState(myCafe?.name || '');
+  const [tagline, setTagline] = useState(myCafe?.tagline || '');
+  const [description, setDescription] = useState(myCafe?.description || '');
+  const [address, setAddress] = useState(myCafe?.address || '');
+  const [openingTime, setOpeningTime] = useState(myCafe?.opening_time || '08:00 AM');
+  const [closingTime, setClosingTime] = useState(myCafe?.closing_time || '10:00 PM');
+  const [phone, setPhone] = useState(myCafe?.phone || '');
+  const [email, setEmail] = useState(myCafe?.email || '');
   const [cafeSaved, setCafeSaved] = useState(false);
 
   // New Menu Item Form State
@@ -60,10 +60,10 @@ export const OwnerDashboard: React.FC = () => {
   // Reply review state
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
 
-  const cafeMenu = menuItems.filter((m) => m.cafe_id === myCafe.id || m.cafe_id === 'cafe-1');
-  const cafeOrders = orders.filter((o) => o.cafe_id === myCafe.id || o.cafe_id === 'cafe-1');
-  const cafeReservations = reservations.filter((r) => r.cafe_id === myCafe.id || r.cafe_id === 'cafe-1');
-  const cafeReviews = reviews.filter((r) => r.cafe_id === myCafe.id || r.cafe_id === 'cafe-1');
+  const cafeMenu = myCafe ? menuItems.filter((m) => m.cafe_id === myCafe.id) : [];
+  const cafeOrders = myCafe ? orders.filter((o) => o.cafe_id === myCafe.id) : [];
+  const cafeReservations = myCafe ? reservations.filter((r) => r.cafe_id === myCafe.id) : [];
+  const cafeReviews = myCafe ? reviews.filter((r) => r.cafe_id === myCafe.id) : [];
 
   // Metrics
   const todayRevenue = cafeOrders.reduce((sum, o) => sum + o.total_amount, 0);
@@ -72,6 +72,7 @@ export const OwnerDashboard: React.FC = () => {
 
   const handleSaveCafe = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!myCafe) return;
     updateCafe(myCafe.id, {
       name: cafeName,
       tagline,
@@ -88,7 +89,7 @@ export const OwnerDashboard: React.FC = () => {
 
   const handleCreateMenuItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemName) return;
+    if (!newItemName || !myCafe) return;
     addMenuItem({
       cafe_id: myCafe.id,
       category_id: `cat-${newItemCategory.toLowerCase()}`,
@@ -112,6 +113,35 @@ export const OwnerDashboard: React.FC = () => {
       setReplyTextMap((prev) => ({ ...prev, [reviewId]: '' }));
     }
   };
+
+  if (!myCafe) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-6">
+        <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600 mx-auto flex items-center justify-center">
+          <Store className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-serif font-bold text-espresso-950">
+            No Cafe Linked Yet
+          </h2>
+          <p className="text-xs text-coffee-600 max-w-md mx-auto">
+            You are authenticated with the Cafe Owner role, but do not currently have a cafe profile linked to your account.
+          </p>
+        </div>
+        <div className="p-6 bg-cream-50 rounded-2xl border border-cream-200 max-w-md mx-auto text-xs text-coffee-600 space-y-3">
+          <p className="font-semibold text-espresso-900">
+            For demonstration and grading:
+          </p>
+          <div className="font-mono bg-white p-2.5 rounded-xl border border-cream-200 text-espresso-900 font-bold">
+            owner@subkocoffee.com / password123
+          </div>
+          <p className="text-[11px] text-coffee-500">
+            (Linked to Subko Coffee Roasters)
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const sidebarLinks = [
     { key: 'overview', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },

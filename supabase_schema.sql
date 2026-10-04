@@ -1,11 +1,12 @@
 -- =================================================================
--- CAFEHUB PRODUCTION DATABASE SCHEMA FOR SUPABASE / POSTGRESQL
+-- CAFEHUB PRODUCTION DATABASE SCHEMA & SECURE RLS POLICIES
+-- PostgreSQL / Supabase
 -- =================================================================
 
 -- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. Profiles Table (extends Supabase auth.users)
+-- 2. Profiles Table (strictly tied to auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
@@ -17,10 +18,72 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Helper Security Functions (SECURITY DEFINER to prevent recursive RLS)
+CREATE OR REPLACE FUNCTION public.get_auth_role()
+RETURNS TEXT AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() AND role = 'admin'
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+CREATE OR REPLACE FUNCTION public.is_cafe_owner(p_cafe_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.cafes 
+    WHERE id = p_cafe_id AND owner_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- Trigger to prevent regular users from escalating their own role in profiles
+CREATE OR REPLACE FUNCTION public.prevent_role_escalation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.role IS DISTINCT FROM OLD.role THEN
+    IF NOT public.is_admin() THEN
+      RAISE EXCEPTION 'Access Denied: Only administrators can modify user roles.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_prevent_role_escalation ON profiles;
+CREATE TRIGGER trg_prevent_role_escalation
+BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.prevent_role_escalation();
+
+-- Automatic profile creation on auth.users signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    COALESCE(NEW.raw_user_meta_data->>'role', 'customer')
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 -- 3. Cafes Table
 CREATE TABLE IF NOT EXISTS cafes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    owner_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE RESTRICT,
     name TEXT NOT NULL,
     slug TEXT UNIQUE NOT NULL,
     tagline TEXT,
@@ -65,7 +128,7 @@ CREATE TABLE IF NOT EXISTS cafe_amenities (
     UNIQUE(cafe_id, amenity_key)
 );
 
--- 6. Cafe Categories (e.g. Coffee, Artisan, Bakery, Work-friendly)
+-- 6. Cafe Categories
 CREATE TABLE IF NOT EXISTS cafe_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     cafe_id UUID NOT NULL REFERENCES cafes(id) ON DELETE CASCADE,
@@ -73,7 +136,7 @@ CREATE TABLE IF NOT EXISTS cafe_categories (
     UNIQUE(cafe_id, category_name)
 );
 
--- 7. Menu Categories (e.g., Coffee, Tea, Breakfast, Snacks, Desserts, Cold Drinks)
+-- 7. Menu Categories
 CREATE TABLE IF NOT EXISTS menu_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     cafe_id UUID NOT NULL REFERENCES cafes(id) ON DELETE CASCADE,
@@ -90,7 +153,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
     category_name TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT NOT NULL,
-    price NUMERIC(10, 2) NOT NULL,
+    price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
     image_url TEXT NOT NULL,
     is_veg BOOLEAN DEFAULT true,
     is_available BOOLEAN DEFAULT true,
@@ -184,7 +247,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     UNIQUE(user_id, cafe_id)
 );
 
--- 14. In-App Notifications
+-- 14. Notifications
 CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -197,7 +260,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 -- =================================================================
--- INDEXES FOR MAXIMUM QUERY SPEED
+-- INDEXES
 -- =================================================================
 CREATE INDEX IF NOT EXISTS idx_cafes_city ON cafes(city);
 CREATE INDEX IF NOT EXISTS idx_cafes_rating ON cafes(rating DESC);
@@ -213,6 +276,8 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 -- =================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- =================================================================
+
+-- Enable RLS across all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cafes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cafe_images ENABLE ROW LEVEL SECURITY;
@@ -227,50 +292,226 @@ ALTER TABLE reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
--- Profiles: Public can read, users can update own profile
-CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+-- -----------------------------------------------------------------
+-- 1. Profiles Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Public can view basic profiles" ON profiles;
+CREATE POLICY "Public can view basic profiles"
+ON profiles FOR SELECT
+USING (true);
 
--- Cafes: Approved cafes are viewable by all; owners can edit their cafe; admins can edit any
-CREATE POLICY "Anyone can view approved cafes" ON cafes FOR SELECT USING (is_approved = true OR auth.uid() = owner_id);
-CREATE POLICY "Owners can update own cafe" ON cafes FOR UPDATE USING (auth.uid() = owner_id);
-CREATE POLICY "Owners can insert cafe" ON cafes FOR INSERT WITH CHECK (auth.uid() = owner_id);
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+CREATE POLICY "Users can update own profile"
+ON profiles FOR UPDATE
+USING (auth.uid() = id);
 
--- Menu items: Anyone can view, cafe owners can manage
-CREATE POLICY "Anyone can view menu items" ON menu_items FOR SELECT USING (true);
-CREATE POLICY "Owners can manage menu items" ON menu_items FOR ALL USING (
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = menu_items.cafe_id AND cafes.owner_id = auth.uid())
+DROP POLICY IF EXISTS "Admins can update any profile" ON profiles;
+CREATE POLICY "Admins can update any profile"
+ON profiles FOR ALL
+USING (public.is_admin());
+
+-- -----------------------------------------------------------------
+-- 2. Cafes Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Public can view approved cafes" ON cafes;
+CREATE POLICY "Public can view approved cafes"
+ON cafes FOR SELECT
+USING (
+  is_approved = true 
+  OR auth.uid() = owner_id 
+  OR public.is_admin()
 );
 
--- Orders: Customers see own orders; Cafe owners see their cafe's orders
-CREATE POLICY "Users can view own orders" ON orders FOR SELECT USING (
-    auth.uid() = user_id OR 
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = orders.cafe_id AND cafes.owner_id = auth.uid())
-);
-CREATE POLICY "Users can insert orders" ON orders FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Owners can update order status" ON orders FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = orders.cafe_id AND cafes.owner_id = auth.uid())
+DROP POLICY IF EXISTS "Owners can update only their own cafe" ON cafes;
+CREATE POLICY "Owners can update only their own cafe"
+ON cafes FOR UPDATE
+USING (
+  auth.uid() = owner_id 
+  OR public.is_admin()
 );
 
--- Reservations: User sees own reservations; Cafe owners see cafe reservations
-CREATE POLICY "Users see own reservations" ON reservations FOR SELECT USING (
-    auth.uid() = user_id OR
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = reservations.cafe_id AND cafes.owner_id = auth.uid())
-);
-CREATE POLICY "Users can insert reservations" ON reservations FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Owners can manage cafe reservations" ON reservations FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = reservations.cafe_id AND cafes.owner_id = auth.uid())
+DROP POLICY IF EXISTS "Owners can insert their cafe" ON cafes;
+CREATE POLICY "Owners can insert their cafe"
+ON cafes FOR INSERT
+WITH CHECK (
+  auth.uid() = owner_id 
+  OR public.is_admin()
 );
 
--- Reviews: Viewable by anyone, inserted by authenticated users
-CREATE POLICY "Reviews viewable by anyone" ON reviews FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can create reviews" ON reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Owners can reply to reviews" ON reviews FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM cafes WHERE cafes.id = reviews.cafe_id AND cafes.owner_id = auth.uid())
+DROP POLICY IF EXISTS "Admins can delete/suspend cafes" ON cafes;
+CREATE POLICY "Admins can delete/suspend cafes"
+ON cafes FOR DELETE
+USING (public.is_admin());
+
+-- -----------------------------------------------------------------
+-- 3. Menu Items Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Anyone can view menu items of approved cafes" ON menu_items;
+CREATE POLICY "Anyone can view menu items of approved cafes"
+ON menu_items FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM cafes 
+    WHERE cafes.id = menu_items.cafe_id 
+    AND (cafes.is_approved = true OR cafes.owner_id = auth.uid() OR public.is_admin())
+  )
 );
 
--- Favorites: Private to each user
-CREATE POLICY "Users manage own favorites" ON favorites FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Owners can insert menu items for their own cafe" ON menu_items;
+CREATE POLICY "Owners can insert menu items for their own cafe"
+ON menu_items FOR INSERT
+WITH CHECK (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
 
--- Notifications: Private to each user
-CREATE POLICY "Users view own notifications" ON notifications FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Owners can update menu items for their own cafe" ON menu_items;
+CREATE POLICY "Owners can update menu items for their own cafe"
+ON menu_items FOR UPDATE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Owners can delete menu items for their own cafe" ON menu_items;
+CREATE POLICY "Owners can delete menu items for their own cafe"
+ON menu_items FOR DELETE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+-- -----------------------------------------------------------------
+-- 4. Orders Security Policies
+-- Customers can only see their own orders.
+-- Owners can ONLY see and manage orders for their own cafe.
+-- Admins can view all orders.
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Customers and cafe owners can view authorized orders" ON orders;
+CREATE POLICY "Customers and cafe owners can view authorized orders"
+ON orders FOR SELECT
+USING (
+  auth.uid() = user_id 
+  OR public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Authenticated users can create orders" ON orders;
+CREATE POLICY "Authenticated users can create orders"
+ON orders FOR INSERT
+WITH CHECK (
+  auth.uid() = user_id 
+  OR user_id IS NULL
+);
+
+DROP POLICY IF EXISTS "Owners and admins can update order status" ON orders;
+CREATE POLICY "Owners and admins can update order status"
+ON orders FOR UPDATE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+-- -----------------------------------------------------------------
+-- 5. Order Items Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Authorized users can view order items" ON order_items;
+CREATE POLICY "Authorized users can view order items"
+ON order_items FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM orders 
+    WHERE orders.id = order_items.order_id 
+    AND (orders.user_id = auth.uid() OR public.is_cafe_owner(orders.cafe_id) OR public.is_admin())
+  )
+);
+
+DROP POLICY IF EXISTS "Order items insertion allowed during checkout" ON order_items;
+CREATE POLICY "Order items insertion allowed during checkout"
+ON order_items FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM orders 
+    WHERE orders.id = order_items.order_id 
+    AND (orders.user_id = auth.uid() OR orders.user_id IS NULL)
+  )
+);
+
+-- -----------------------------------------------------------------
+-- 6. Reservations Security Policies
+-- Customers can only see and manage their own reservations.
+-- Owners can ONLY see and manage reservations for their own cafe.
+-- Admins can view all.
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Authorized users can view reservations" ON reservations;
+CREATE POLICY "Authorized users can view reservations"
+ON reservations FOR SELECT
+USING (
+  auth.uid() = user_id 
+  OR public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Users can create reservations" ON reservations;
+CREATE POLICY "Users can create reservations"
+ON reservations FOR INSERT
+WITH CHECK (
+  auth.uid() = user_id 
+  OR user_id IS NULL
+);
+
+DROP POLICY IF EXISTS "Owners and customers can update reservations" ON reservations;
+CREATE POLICY "Owners and customers can update reservations"
+ON reservations FOR UPDATE
+USING (
+  auth.uid() = user_id 
+  OR public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+-- -----------------------------------------------------------------
+-- 7. Reviews Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Public can view reviews" ON reviews;
+CREATE POLICY "Public can view reviews"
+ON reviews FOR SELECT
+USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can create reviews" ON reviews;
+CREATE POLICY "Authenticated users can create reviews"
+ON reviews FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Cafe owners can reply to reviews" ON reviews;
+CREATE POLICY "Cafe owners can reply to reviews"
+ON reviews FOR UPDATE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Users and Admins can delete reviews" ON reviews;
+CREATE POLICY "Users and Admins can delete reviews"
+ON reviews FOR DELETE
+USING (
+  auth.uid() = user_id 
+  OR public.is_admin()
+);
+
+-- -----------------------------------------------------------------
+-- 8. Favorites Security Policies (Strictly User Isolated)
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Users manage their own favorites" ON favorites;
+CREATE POLICY "Users manage their own favorites"
+ON favorites FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- -----------------------------------------------------------------
+-- 9. Notifications Security Policies (Strictly User Isolated)
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Users manage their own notifications" ON notifications;
+CREATE POLICY "Users manage their own notifications"
+ON notifications FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
