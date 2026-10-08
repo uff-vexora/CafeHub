@@ -32,13 +32,6 @@ RETURNS BOOLEAN AS $$
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
-CREATE OR REPLACE FUNCTION public.is_cafe_owner(p_cafe_id UUID)
-RETURNS BOOLEAN AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.cafes 
-    WHERE id = p_cafe_id AND owner_id = auth.uid()
-  );
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 -- Trigger to prevent regular users from escalating their own role in profiles
 CREATE OR REPLACE FUNCTION public.prevent_role_escalation()
@@ -108,6 +101,20 @@ CREATE TABLE IF NOT EXISTS cafes (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Helper to verify if the authenticated user owns a specific cafe
+CREATE OR REPLACE FUNCTION public.is_cafe_owner(p_cafe_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  IF p_cafe_id IS NULL THEN
+    RETURN FALSE;
+  END IF;
+  RETURN EXISTS (
+    SELECT 1 FROM public.cafes 
+    WHERE id = p_cafe_id AND owner_id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 -- 4. Cafe Images Gallery
 CREATE TABLE IF NOT EXISTS cafe_images (
@@ -342,6 +349,125 @@ DROP POLICY IF EXISTS "Admins can delete/suspend cafes" ON cafes;
 CREATE POLICY "Admins can delete/suspend cafes"
 ON cafes FOR DELETE
 USING (public.is_admin());
+
+-- -----------------------------------------------------------------
+-- 2b. Cafe Images, Amenities, and Categories Security Policies
+-- -----------------------------------------------------------------
+DROP POLICY IF EXISTS "Public can view cafe images" ON cafe_images;
+CREATE POLICY "Public can view cafe images"
+ON cafe_images FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM cafes 
+    WHERE cafes.id = cafe_images.cafe_id 
+    AND (cafes.is_approved = true OR cafes.owner_id = auth.uid() OR public.is_admin())
+  )
+);
+
+DROP POLICY IF EXISTS "Owners can insert images for their cafe" ON cafe_images;
+CREATE POLICY "Owners can insert images for their cafe"
+ON cafe_images FOR INSERT
+WITH CHECK (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Owners can update their cafe images" ON cafe_images;
+CREATE POLICY "Owners can update their cafe images"
+ON cafe_images FOR UPDATE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Owners can delete their cafe images" ON cafe_images;
+CREATE POLICY "Owners can delete their cafe images"
+ON cafe_images FOR DELETE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Public can view cafe amenities" ON cafe_amenities;
+CREATE POLICY "Public can view cafe amenities"
+ON cafe_amenities FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM cafes 
+    WHERE cafes.id = cafe_amenities.cafe_id 
+    AND (cafes.is_approved = true OR cafes.owner_id = auth.uid() OR public.is_admin())
+  )
+);
+
+DROP POLICY IF EXISTS "Owners can manage their cafe amenities" ON cafe_amenities;
+CREATE POLICY "Owners can manage their cafe amenities"
+ON cafe_amenities FOR ALL
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+)
+WITH CHECK (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Public can view cafe categories" ON cafe_categories;
+CREATE POLICY "Public can view cafe categories"
+ON cafe_categories FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM cafes 
+    WHERE cafes.id = cafe_categories.cafe_id 
+    AND (cafes.is_approved = true OR cafes.owner_id = auth.uid() OR public.is_admin())
+  )
+);
+
+DROP POLICY IF EXISTS "Owners can manage their cafe categories" ON cafe_categories;
+CREATE POLICY "Owners can manage their cafe categories"
+ON cafe_categories FOR ALL
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+)
+WITH CHECK (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Public can view menu categories" ON menu_categories;
+CREATE POLICY "Public can view menu categories"
+ON menu_categories FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM cafes 
+    WHERE cafes.id = menu_categories.cafe_id 
+    AND (cafes.is_approved = true OR cafes.owner_id = auth.uid() OR public.is_admin())
+  )
+);
+
+DROP POLICY IF EXISTS "Owners can insert menu categories" ON menu_categories;
+CREATE POLICY "Owners can insert menu categories"
+ON menu_categories FOR INSERT
+WITH CHECK (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Owners can update menu categories" ON menu_categories;
+CREATE POLICY "Owners can update menu categories"
+ON menu_categories FOR UPDATE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
+
+DROP POLICY IF EXISTS "Owners can delete menu categories" ON menu_categories;
+CREATE POLICY "Owners can delete menu categories"
+ON menu_categories FOR DELETE
+USING (
+  public.is_cafe_owner(cafe_id) 
+  OR public.is_admin()
+);
 
 -- -----------------------------------------------------------------
 -- 3. Menu Items Security Policies

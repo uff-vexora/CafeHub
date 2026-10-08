@@ -20,21 +20,28 @@ import {
   Filter,
   Eye,
   FileText,
-  Settings,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/common/Badge';
 import { SEED_PROFILES } from '../../data/seedData';
 import { UserRole } from '../../types';
+import { NumberTicker, Reveal } from '../../components/motion';
 
 interface AdminDashboardProps {
   defaultTab?: 'metrics' | 'cafes' | 'users' | 'orders' | 'reservations' | 'reviews' | 'reports' | 'settings';
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ defaultTab = 'metrics' }) => {
-  const { cafes, orders, reservations, reviews, approveCafe, suspendCafe, deleteReview } = useData();
-  const { user, updateUserRoleAsAdmin } = useAuth();
+  const { cafes, orders, reservations, reviews, approveCafe, rejectCafe, suspendCafe, deleteReview } = useData();
+  const { updateUserRoleAsAdmin } = useAuth();
+
+  const handleRejectCafe = async (cafeId: string) => {
+    const reason = window.prompt('Enter rejection feedback for this cafe owner:');
+    if (reason && reason.trim()) {
+      await rejectCafe(cafeId, reason.trim());
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'metrics' | 'cafes' | 'users' | 'orders' | 'reservations' | 'reviews' | 'reports' | 'settings'>(defaultTab);
 
@@ -138,39 +145,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ defaultTab = 'me
       {/* ============================================================== */}
       {activeTab === 'metrics' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5">
-              <span className="text-[11px] font-bold uppercase text-purple-700">Gross GMV</span>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                ₹{totalRevenue.toFixed(0)}
+          <Reveal variant="fade-up" durationMs={500}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-terracotta-600">Gross GMV</span>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={Math.round(totalRevenue)} prefix="₹" />
+                </div>
+                <span className="text-[10px] text-emerald-600 font-semibold">+24.5% platform volume</span>
               </div>
-              <span className="text-[10px] text-emerald-600 font-semibold">+24.5% platform growth</span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5">
-              <span className="text-[11px] font-bold uppercase text-purple-700">Platform Revenue</span>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                ₹{platformFee.toFixed(0)}
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Platform Revenue</span>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={Math.round(platformFee)} prefix="₹" />
+                </div>
+                <span className="text-[10px] text-amber-600 font-semibold">10% platform take-rate</span>
               </div>
-              <span className="text-[10px] text-purple-600 font-semibold">10% commission rake</span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5">
-              <span className="text-[11px] font-bold uppercase text-purple-700">Verified Cafes</span>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                {totalCafesCount}
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-coffee-600">Verified Cafes</span>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={totalCafesCount} />
+                </div>
+                <span className="text-[10px] text-coffee-400">{approvedCafesCount} active & approved</span>
               </div>
-              <span className="text-[10px] text-coffee-400">{approvedCafesCount} active & approved</span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5">
-              <span className="text-[11px] font-bold uppercase text-purple-700">Table Bookings</span>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                {reservations.length}
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-1.5 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-terracotta-700">Table Bookings</span>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={reservations.length} />
+                </div>
+                <span className="text-[10px] text-coffee-400">Total dining seatings</span>
               </div>
-              <span className="text-[10px] text-coffee-400">Total dining seatings</span>
             </div>
-          </div>
+          </Reveal>
 
           {/* Quick Approvals Snapshot */}
           <div className="bg-white p-6 rounded-3xl border border-cream-200 shadow-warm space-y-4">
@@ -238,10 +247,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ defaultTab = 'me
                         {cafe.name}
                       </h4>
                       <Badge
-                        variant={cafe.is_approved ? 'success' : 'warning'}
+                        variant={
+                          cafe.status === 'approved' || cafe.is_approved
+                            ? 'success'
+                            : cafe.status === 'rejected'
+                            ? 'danger'
+                            : cafe.status === 'suspended'
+                            ? 'danger'
+                            : 'warning'
+                        }
                         size="sm"
                       >
-                        {cafe.is_approved ? 'Approved' : 'Pending Review'}
+                        {cafe.status === 'approved' || cafe.is_approved
+                          ? 'Approved'
+                          : cafe.status === 'rejected'
+                          ? 'Rejected'
+                          : cafe.status === 'suspended'
+                          ? 'Suspended'
+                          : cafe.status === 'draft'
+                          ? 'Draft'
+                          : 'Pending Review'}
                       </Badge>
                       {cafe.is_featured && (
                         <Badge variant="primary" size="sm">
@@ -253,21 +278,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ defaultTab = 'me
                       {cafe.city} • Rating: {cafe.rating}★ ({cafe.review_count} reviews)
                     </p>
                     <p className="text-coffee-400 text-[11px] mt-0.5">{cafe.address}</p>
+                    {cafe.rejection_reason && (
+                      <p className="text-rose-600 text-[11px] mt-1 font-semibold">
+                        Feedback: {cafe.rejection_reason}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 self-end sm:self-auto">
-                  {!cafe.is_approved ? (
-                    <button
-                      onClick={() => approveCafe(cafe.id)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
-                    >
-                      Approve Cafe
-                    </button>
+                  {!(cafe.status === 'approved' || cafe.is_approved) ? (
+                    <>
+                      <button
+                        onClick={() => approveCafe(cafe.id)}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
+                      >
+                        Approve Cafe
+                      </button>
+                      <button
+                        onClick={() => handleRejectCafe(cafe.id)}
+                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-colors"
+                      >
+                        Reject
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => suspendCafe(cafe.id)}
-                      className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl transition-colors"
+                      className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl transition-colors"
                     >
                       Suspend Access
                     </button>

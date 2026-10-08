@@ -58,6 +58,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     instructions?: string,
     cafeInfo?: { id: string; name: string }
   ): boolean => {
+    // Only available items can be added to cart
+    if (!item.is_available) {
+      alert(`"${item.name}" is currently sold out and unavailable.`);
+      return false;
+    }
+
     const targetCafeId = cafeInfo?.id || item.cafe_id;
     const targetCafeName = cafeInfo?.name || 'Cafe';
 

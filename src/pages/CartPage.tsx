@@ -16,6 +16,7 @@ import { useCart } from '../context/CartContext';
 import { VegNonVegIndicator } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 import { OrderType } from '../types';
+import { MagneticButton } from '../components/motion';
 
 export const CartPage: React.FC = () => {
   const {
@@ -51,7 +52,7 @@ export const CartPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-cream-200">
         <div>
@@ -64,7 +65,7 @@ export const CartPage: React.FC = () => {
           {cafeName && (
             <p className="text-xs text-coffee-600 mt-1">
               Ordering from{' '}
-              <Link to={`/cafes/${cafeId}`} className="font-bold text-espresso-900 hover:underline">
+              <Link to={`/cafes/${cafeId}`} className="font-bold text-espresso-900 hover:text-terracotta-600 transition-colors">
                 {cafeName}
               </Link>
             </p>
@@ -73,7 +74,7 @@ export const CartPage: React.FC = () => {
 
         <button
           onClick={clearCart}
-          className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 self-start sm:self-auto"
+          className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-xl hover:bg-rose-50 transition-colors"
         >
           <Trash2 className="w-4 h-4" />
           <span>Clear Cart</span>
@@ -84,28 +85,34 @@ export const CartPage: React.FC = () => {
         {/* Left 2 Cols: Cart Items & Order Type */}
         <div className="lg:col-span-2 space-y-6">
           {/* Order Type Selector */}
-          <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-3">
-            <h3 className="font-serif font-bold text-sm text-espresso-950">
-              How would you like your order?
+          <div className="bg-white p-6 rounded-3xl border border-cream-200 shadow-warm space-y-4 card-lift">
+            <h3 className="font-serif font-bold text-sm text-espresso-950 flex items-center gap-2">
+              <span>Fulfillment Method</span>
+              <span className="text-xs font-normal text-coffee-500">• Select how you'd like your order</span>
             </h3>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               {[
-                { type: 'dine_in' as OrderType, label: 'Dine-In', icon: <Utensils className="w-4 h-4" /> },
-                { type: 'pickup' as OrderType, label: 'Takeaway', icon: <Package className="w-4 h-4" /> },
-                { type: 'delivery' as OrderType, label: 'Delivery', icon: <Bike className="w-4 h-4" /> },
+                { type: 'dine_in' as OrderType, label: 'Dine-In', desc: 'At the Cafe', icon: <Utensils className="w-4 h-4" /> },
+                { type: 'pickup' as OrderType, label: 'Takeaway', desc: 'Quick Pick Up', icon: <Package className="w-4 h-4" /> },
+                { type: 'delivery' as OrderType, label: 'Delivery', desc: 'To Your Door', icon: <Bike className="w-4 h-4" /> },
               ].map((opt) => (
                 <button
                   key={opt.type}
                   type="button"
                   onClick={() => setOrderType(opt.type)}
-                  className={`py-3 px-2 rounded-2xl border text-center font-bold text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all ${
+                  className={`py-3.5 px-3 rounded-2xl border text-center font-bold text-xs flex flex-col items-center justify-center gap-1.5 transition-all card-lift ${
                     orderType === opt.type
-                      ? 'bg-espresso-900 text-white border-espresso-900 shadow-warm'
+                      ? 'bg-espresso-900 text-white border-espresso-900 shadow-warm-md'
                       : 'bg-cream-50 hover:bg-cream-100 text-espresso-800 border-cream-200'
                   }`}
                 >
-                  {opt.icon}
+                  <div className={`p-2 rounded-xl ${orderType === opt.type ? 'bg-white/10 text-terracotta-400' : 'bg-white text-coffee-600 shadow-xs'}`}>
+                    {opt.icon}
+                  </div>
                   <span>{opt.label}</span>
+                  <span className={`text-[10px] font-normal ${orderType === opt.type ? 'text-cream-300' : 'text-coffee-500'}`}>
+                    {opt.desc}
+                  </span>
                 </button>
               ))}
             </div>
@@ -246,13 +253,15 @@ export const CartPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => navigate('/checkout')}
-              className="w-full py-4 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            >
-              <span>Proceed to Checkout</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <MagneticButton strength={4} className="w-full">
+              <button
+                onClick={() => navigate('/checkout')}
+                className="w-full py-4 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              >
+                <span>Proceed to Checkout</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </MagneticButton>
 
             <p className="text-[11px] text-center text-coffee-400">
               🔒 Safe & secure simulated checkout with instant confirmation

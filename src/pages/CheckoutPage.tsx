@@ -17,6 +17,7 @@ import { useCart } from '../context/CartContext';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Order } from '../types';
+import { MagneticButton } from '../components/motion';
 
 export const CheckoutPage: React.FC = () => {
   const { items, cafeId, cafeName, orderType, subtotal, taxes, serviceFee, deliveryFee, totalAmount, clearCart } = useCart();
@@ -41,6 +42,7 @@ export const CheckoutPage: React.FC = () => {
   // Payment method
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Card' | 'Counter'>('UPI');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
   if (items.length === 0 && !confirmedOrder) {
@@ -48,30 +50,29 @@ export const CheckoutPage: React.FC = () => {
     return null;
   }
 
-  const handlePlaceOrder = (e: React.FormEvent) => {
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProcessing) return; // Deduplication protection
+
+    setOrderError(null);
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const res = createOrder({
-        cafe_id: cafeId || 'cafe-1',
-        cafe_name: cafeName || 'Specialty Cafe',
-        cafe_image: cafe?.cover_image || 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=400&q=80',
+    try {
+      const dbPaymentMethod =
+        paymentMethod === 'UPI'
+          ? 'UPI / Card'
+          : paymentMethod === 'Card'
+          ? 'Card at Cafe'
+          : 'Cash on Pickup';
+
+      const res = await createOrder({
+        cafe_id: cafeId || '',
         order_type: orderType,
-        items: items.map((ci, idx) => ({
-          id: `oi-${Date.now()}-${idx}`,
+        items: items.map((ci) => ({
           menu_item_id: ci.menu_item.id,
-          item_name: ci.menu_item.name,
-          item_price: ci.menu_item.price,
           quantity: ci.quantity,
-          item_total: ci.menu_item.price * ci.quantity,
           customizations: ci.selected_customizations,
         })),
-        subtotal,
-        taxes,
-        service_fee: serviceFee,
-        delivery_fee: deliveryFee,
-        total_amount: totalAmount,
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_email: customerEmail,
@@ -80,25 +81,27 @@ export const CheckoutPage: React.FC = () => {
         delivery_postal_code: orderType === 'delivery' ? deliveryPostalCode : undefined,
         dine_in_table: orderType === 'dine_in' ? dineInTable : undefined,
         notes: notes.trim() || undefined,
-        payment_status: 'paid',
-        payment_method: paymentMethod === 'UPI' ? 'UPI (Google Pay / PhonePe)' : paymentMethod === 'Card' ? 'Credit / Debit Card' : 'Pay at Counter',
-        estimated_time: orderType === 'delivery' ? '30-40 mins' : orderType === 'pickup' ? '15 mins' : '10-15 mins',
+        payment_method: dbPaymentMethod,
       });
 
       if (res.success && res.order) {
         setConfirmedOrder(res.order);
+        clearCart();
+        // Trigger celebratory confetti
+        confetti({
+          particleCount: 100,
+          spread: 80,
+          origin: { y: 0.5 },
+          colors: ['#DE6441', '#8C6543', '#E2971B', '#10B981'],
+        });
+      } else {
+        setOrderError(res.error || 'Failed to place order. Please review your cart.');
       }
-      clearCart();
+    } catch (err: any) {
+      setOrderError(err?.message || 'Unexpected error occurred while placing order.');
+    } finally {
       setIsProcessing(false);
-
-      // Trigger Confetti
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.5 },
-        colors: ['#DE6441', '#8C6543', '#E2971B', '#10B981'],
-      });
-    }, 1200);
+    }
   };
 
   // Confirmation View
@@ -112,13 +115,13 @@ export const CheckoutPage: React.FC = () => {
 
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/80 px-3.5 py-1 rounded-full">
-              Payment Successful • Order Placed
+              Order Confirmed • Status: {confirmedOrder.status.replace('_', ' ').toUpperCase()}
             </span>
             <h2 className="text-3xl font-serif font-bold text-espresso-950 mt-3">
-              Order Confirmed!
+              Order Placed Successfully!
             </h2>
             <p className="text-xs text-coffee-600 mt-1 max-w-sm mx-auto">
-              Your order <span className="font-bold text-espresso-900">#{confirmedOrder.order_number}</span> has been sent to {confirmedOrder.cafe_name}.
+              Your order <span className="font-bold text-espresso-900">#{confirmedOrder.order_number}</span> has been received by {confirmedOrder.cafe_name}.
             </p>
           </div>
 
@@ -180,7 +183,7 @@ export const CheckoutPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
       {/* Header */}
       <div>
         <span className="text-xs font-bold uppercase tracking-wider text-terracotta-600">
@@ -415,23 +418,31 @@ export const CheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="w-full py-4 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Processing Payment...</span>
-                </>
-              ) : (
-                <>
-                  <span>Pay & Place Order</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
+            {orderError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
+                {orderError}
+              </div>
+            )}
+
+            <MagneticButton strength={4} className="w-full">
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="w-full py-4 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Placing Order...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Place Order</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </MagneticButton>
           </div>
         </div>
       </form>

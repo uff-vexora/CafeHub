@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   ShoppingBag,
   Clock,
@@ -9,13 +8,13 @@ import {
   Bike,
   Check,
   ChevronRight,
-  MapPin,
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 import { OrderStatus } from '../types';
+import { Reveal } from '../components/motion';
 
 const STATUS_STEPS: { key: OrderStatus; label: string; icon: React.ReactNode }[] = [
   { key: 'order_placed', label: 'Order Placed', icon: <ShoppingBag className="w-4 h-4" /> },
@@ -57,7 +56,7 @@ export const OrdersPage: React.FC = () => {
   const currentStep = activeOrder ? getStepIndex(activeOrder.status) : 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
       {/* Header */}
       <div>
         <span className="text-xs font-bold uppercase tracking-wider text-terracotta-600">
@@ -79,18 +78,18 @@ export const OrdersPage: React.FC = () => {
           </h3>
 
           <div className="space-y-3">
-            {userOrders.map((order) => {
+            {userOrders.map((order, idx) => {
               const isSelected = order.id === selectedOrderId;
               return (
-                <div
-                  key={order.id}
-                  onClick={() => setSelectedOrderId(order.id)}
-                  className={`p-4 rounded-3xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-white border-terracotta-500 shadow-warm-md ring-2 ring-terracotta-500/10'
-                      : 'bg-white hover:bg-cream-50 border-cream-200 shadow-warm'
-                  }`}
-                >
+                <Reveal key={order.id} variant="fade-up" delayMs={idx * 50} durationMs={400}>
+                  <div
+                    onClick={() => setSelectedOrderId(order.id)}
+                    className={`p-4 rounded-3xl border transition-all cursor-pointer card-lift ${
+                      isSelected
+                        ? 'bg-white border-terracotta-500 shadow-warm-md ring-2 ring-terracotta-500/20'
+                        : 'bg-white hover:bg-cream-50 border-cream-200 shadow-warm'
+                    }`}
+                  >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-mono text-xs font-bold text-espresso-900">
                       #{order.order_number}
@@ -131,7 +130,8 @@ export const OrdersPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              );
+              </Reveal>
+            );
             })}
           </div>
         </div>
@@ -180,7 +180,7 @@ export const OrdersPage: React.FC = () => {
                               isCompleted
                                 ? 'bg-emerald-500 text-white shadow-emerald-200'
                                 : 'bg-cream-100 text-coffee-400 border border-cream-300'
-                            } ${isCurrent ? 'ring-4 ring-emerald-200 scale-110' : ''}`}
+                            } ${isCurrent ? 'ring-4 ring-emerald-300 scale-110 animate-pulse-glow' : ''}`}
                           >
                             {step.icon}
                           </div>

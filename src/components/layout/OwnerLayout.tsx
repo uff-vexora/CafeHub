@@ -17,6 +17,7 @@ import {
   ChevronRight,
   TrendingUp,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -31,8 +32,8 @@ export const OwnerLayout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  // Find owner's cafe
-  const myCafe = cafes.find((c) => c.owner_id === user?.id) || cafes[0];
+  // Find owner's cafe (Strictly isolated by owner_id)
+  const myCafe = cafes.find((c) => c.owner_id === user?.id);
 
   const cafeOrders = myCafe ? orders.filter((o) => o.cafe_id === myCafe.id) : [];
   const activeOrdersCount = cafeOrders.filter(
@@ -45,6 +46,13 @@ export const OwnerLayout: React.FC = () => {
   const unreadNotifs = notifications.filter((n) => !n.is_read);
 
   const navItems = [
+    {
+      to: '/owner/onboarding',
+      label: 'Setup & Onboarding',
+      icon: <Sparkles className="w-5 h-5" />,
+      badge: !myCafe || myCafe.status === 'draft' ? 'Action' : myCafe.status === 'rejected' ? 'Fix' : undefined,
+      badgeColor: !myCafe || myCafe.status === 'draft' ? 'bg-amber-600 text-white' : 'bg-rose-600 text-white',
+    },
     {
       to: '/owner',
       label: 'Overview',
@@ -122,7 +130,7 @@ export const OwnerLayout: React.FC = () => {
               </Link>
 
               {/* Store Identifier Badge */}
-              {myCafe && (
+              {myCafe ? (
                 <div className="hidden md:flex items-center gap-2 py-1.5 px-3.5 bg-cream-100 rounded-full border border-cream-300">
                   <Store className="w-3.5 h-3.5 text-amber-600" />
                   <span className="text-xs font-bold text-espresso-900 truncate max-w-[200px]">
@@ -130,16 +138,62 @@ export const OwnerLayout: React.FC = () => {
                   </span>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ml-1" title="Accepting Orders" />
                 </div>
+              ) : (
+                <div className="hidden md:flex items-center gap-2 py-1.5 px-3.5 bg-amber-50 rounded-full border border-amber-200 text-amber-800">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="text-xs font-bold">No Cafe Linked</span>
+                </div>
               )}
             </div>
 
             {/* Right: Notification Bell & Owner User Profile */}
             <div className="flex items-center gap-3">
               {/* Store Status Pill */}
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Store Open</span>
-              </div>
+              {myCafe ? (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-cream-100 border border-cream-300 text-xs font-semibold">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      myCafe.status === 'approved'
+                        ? 'bg-emerald-500'
+                        : myCafe.status === 'pending_approval'
+                        ? 'bg-amber-500 animate-pulse'
+                        : myCafe.status === 'rejected'
+                        ? 'bg-rose-500'
+                        : myCafe.status === 'suspended'
+                        ? 'bg-rose-500'
+                        : 'bg-amber-500'
+                    }`}
+                  />
+                  <span
+                    className={
+                      myCafe.status === 'approved'
+                        ? 'text-emerald-800'
+                        : myCafe.status === 'pending_approval'
+                        ? 'text-amber-800'
+                        : myCafe.status === 'rejected'
+                        ? 'text-rose-800'
+                        : myCafe.status === 'suspended'
+                        ? 'text-rose-800'
+                        : 'text-amber-800'
+                    }
+                  >
+                    {myCafe.status === 'approved'
+                      ? 'Store Active'
+                      : myCafe.status === 'pending_approval'
+                      ? 'Under Review'
+                      : myCafe.status === 'rejected'
+                      ? 'Revision Required'
+                      : myCafe.status === 'suspended'
+                      ? 'Suspended'
+                      : 'Draft Mode'}
+                  </span>
+                </div>
+              ) : (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>Setup Required</span>
+                </div>
+              )}
 
               {/* In-App Notifications */}
               <div className="relative">
@@ -331,7 +385,46 @@ export const OwnerLayout: React.FC = () => {
           </aside>
 
           {/* Right Main Content */}
-          <main className="lg:col-span-3">
+          <main className="lg:col-span-3 space-y-4">
+            {!myCafe && user?.role === 'cafe_owner' && location.pathname !== '/owner/onboarding' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-4 text-xs text-amber-900 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">Setup Required: No Cafe Profile Linked</p>
+                    <p className="text-amber-700 text-[11px] mt-0.5">
+                      Register your cafe profile and menu to start accepting live customer orders and reservations.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/owner/onboarding"
+                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-xs"
+                >
+                  Start Onboarding
+                </Link>
+              </div>
+            )}
+
+            {myCafe && myCafe.status === 'rejected' && location.pathname !== '/owner/onboarding' && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-4 text-xs text-rose-900 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">Application Returned by Admin</p>
+                    <p className="text-rose-700 text-[11px] mt-0.5">
+                      {myCafe.rejection_reason || 'Please adjust your cafe details and resubmit for approval.'}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to="/owner/onboarding"
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-xs"
+                >
+                  Edit & Resubmit
+                </Link>
+              </div>
+            )}
             <Outlet />
           </main>
         </div>

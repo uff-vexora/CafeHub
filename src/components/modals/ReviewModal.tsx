@@ -18,27 +18,49 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   onClose,
 }) => {
   const { user } = useAuth();
-  const { addReview } = useData();
+  const { reviews, addReview } = useData();
 
-  const [rating, setRating] = useState(5);
+  const existingReview = reviews.find((r) => r.user_id === user?.id && r.cafe_id === cafeId);
+
+  const [rating, setRating] = useState(existingReview?.rating || 5);
   const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(existingReview?.comment || '');
   const [reviewerName, setReviewerName] = useState(user?.full_name || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    if (existingReview) {
+      setRating(existingReview.rating);
+      setComment(existingReview.comment);
+    }
+  }, [existingReview]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!comment.trim()) return;
+    if (isSubmitting) return;
 
-    addReview({
-      cafe_id: cafeId,
-      rating,
-      comment: comment.trim(),
-      user_avatar: user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-    });
+    setReviewError(null);
+    setIsSubmitting(true);
 
-    onClose();
-    setComment('');
-    setRating(5);
+    try {
+      const res = await addReview({
+        cafe_id: cafeId,
+        rating,
+        comment: comment.trim(),
+      });
+
+      if (res.success) {
+        onClose();
+      } else {
+        setReviewError(res.error || 'Failed to submit review.');
+      }
+    } catch (err: any) {
+      setReviewError(err?.message || 'Error occurred while saving review.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -95,6 +117,12 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           />
         </div>
 
+        {reviewError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
+            {reviewError}
+          </div>
+        )}
+
         {/* Comment Textarea */}
         <div>
           <label className="text-xs font-bold text-espresso-900">Your Experience</label>
@@ -110,10 +138,15 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
         <button
           type="submit"
-          className="w-full py-3 bg-espresso-900 hover:bg-espresso-800 text-white font-bold text-xs rounded-xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+          disabled={isSubmitting || !comment.trim()}
+          className="w-full py-3 bg-espresso-900 hover:bg-espresso-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
         >
-          <Send className="w-4 h-4" />
-          <span>Post Review</span>
+          {isSubmitting ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+          <span>{isSubmitting ? 'Saving...' : existingReview ? 'Update Review' : 'Post Review'}</span>
         </button>
       </form>
     </Modal>

@@ -15,6 +15,14 @@ import { CafeCard } from '../components/cards/CafeCard';
 import { EmptyState } from '../components/common/EmptyState';
 import { AmenityKey, Cafe } from '../types';
 import { CITIES } from '../components/layout/Navbar';
+import {
+  ScrollSpotlight,
+  ParallaxLayer,
+  TiltCard,
+  Reveal,
+  PinnedStoryScene,
+  SectionOverlapBridge,
+} from '../components/motion';
 
 const AMENITY_LABELS: Record<AmenityKey, string> = {
   wifi: 'Fast Wi-Fi',
@@ -101,8 +109,8 @@ export const DiscoveryPage: React.FC = () => {
   const filteredCafes = useMemo(() => {
     return cafes
       .filter((cafe) => {
-        // Must be approved
-        if (!cafe.is_approved) return false;
+        // Must be approved and live (never show draft, pending_approval, rejected, or suspended)
+        if (!cafe.is_approved || (cafe.status && cafe.status !== 'approved')) return false;
 
         // Search text: cafe name, location, categories, description
         if (searchQuery.trim()) {
@@ -313,37 +321,103 @@ export const DiscoveryPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Top Search & Filter Bar */}
-      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-cream-200 shadow-warm flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Search input */}
-        <div className="relative flex-1 w-full">
-          <Search className="w-5 h-5 text-coffee-400 absolute left-4 top-3.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by cafe name, coffee variety, artisan sourdough, pasta..."
-            className="w-full bg-cream-50 border border-cream-200 focus:border-terracotta-500 rounded-2xl pl-12 pr-4 py-3 text-xs sm:text-sm text-espresso-900 placeholder:text-coffee-400 outline-none transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-3.5 text-coffee-400 hover:text-espresso-900"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-7 animate-fade-up">
 
-        {/* City Filter */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-cream-50 border border-cream-200 rounded-2xl w-full sm:w-44">
+      {/* ── CINEMATIC DISCOVERY HERO ─────────────────────────── */}
+      <Reveal variant="scale-in" durationMs={650}>
+        <ScrollSpotlight
+          size={420}
+          color="rgba(222, 100, 65, 0.16)"
+          className="rounded-4xl hero-mesh-dark shadow-glow-espresso border border-white/10"
+        >
+          <ParallaxLayer depth="background" className="absolute top-0 left-1/4 w-80 h-80 pointer-events-none">
+            <div className="w-full h-full rounded-full bg-terracotta-500/20 blur-3xl ambient-glow" />
+          </ParallaxLayer>
+
+          <ParallaxLayer depth="background" className="absolute bottom-0 right-1/4 w-60 h-60 pointer-events-none">
+            <div className="w-full h-full rounded-full bg-caramel-400/15 blur-3xl ambient-glow" style={{ animationDelay: '2s' }} />
+          </ParallaxLayer>
+
+          <div className="stripe-pattern absolute inset-0 pointer-events-none opacity-40" />
+
+          <div className="relative z-10 px-7 sm:px-10 py-8 sm:py-10 space-y-6">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                {filteredCafes.length} Verified Artisan Cafes
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5">
+              <div>
+                <h1 className="text-3xl sm:text-5xl font-serif font-bold text-white leading-[1.15] tracking-tight">
+                  Discover Your<br />
+                  <span className="text-gradient-cream">Perfect Cafe</span>
+                </h1>
+                <p className="text-sm sm:text-base text-cream-200/70 mt-2 max-w-md font-light leading-relaxed">
+                  Specialty roasters, artisan espresso bars & quiet work sanctuaries — curated across India.
+                </p>
+              </div>
+
+              {/* Search bar inside hero */}
+              <div className="relative sm:w-96 flex-shrink-0">
+                <Search className="w-4 h-4 text-cream-200/50 absolute left-4 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cafe name, city, latte art..."
+                  className="w-full glass-dark text-white placeholder:text-cream-200/40 rounded-2xl pl-11 pr-10 py-3 text-sm outline-none focus:border-terracotta-400 border border-white/10 focus:border-opacity-100 transition-all shadow-inner"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                    <X className="w-4 h-4 text-cream-200/60 hover:text-white" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Category pills */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              {CATEGORIES.slice(0, 8).map((cat, i) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  style={{ animationDelay: `${i * 40}ms` }}
+                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                    selectedCategory === cat
+                      ? 'bg-terracotta-600 text-white border-terracotta-500 shadow-glow-terra scale-105'
+                      : 'glass-dark text-cream-200/70 border-white/10 hover:border-white/25 hover:text-white'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        </ScrollSpotlight>
+      </Reveal>
+
+      {/* ── PINNED CINEMATIC STORY SCENE ───────────────────────── */}
+      <PinnedStoryScene
+        totalCafesCount={cafes.length}
+        onExploreClick={() => {
+          document.getElementById('directory-grid')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+
+      {/* ── TOOLBAR / CONTROLS WITH OVERLAPPING BRIDGE ───────── */}
+      <div id="directory-grid" className="scroll-mt-24">
+        <SectionOverlapBridge overlapDistance={-28} parallaxSpeed={0.06}>
+          <div className="bg-white p-4 sm:p-5 rounded-3xl border border-cream-200 shadow-warm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+        {/* Quick Location & Status info */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-cream-50 hover:bg-cream-100 border border-cream-200 rounded-2xl transition-colors">
             <MapPin className="w-4 h-4 text-terracotta-600 shrink-0" />
             <select
               value={selectedCity}
               onChange={(e) => setSelectedCity(e.target.value)}
-              className="bg-transparent text-xs font-bold text-espresso-900 outline-none w-full cursor-pointer"
+              className="bg-transparent text-xs sm:text-sm font-bold text-espresso-900 outline-none cursor-pointer"
             >
               {CITIES.map((c) => (
                 <option key={c} value={c}>
@@ -353,18 +427,39 @@ export const DiscoveryPage: React.FC = () => {
             </select>
           </div>
 
+          <div className="hidden sm:flex items-center gap-2 text-xs text-coffee-600 bg-cream-50/60 px-3.5 py-2.5 rounded-2xl border border-cream-200/60">
+            <Sparkles className="w-3.5 h-3.5 text-caramel-500" />
+            <span>
+              <strong className="text-espresso-950 font-semibold">{filteredCafes.length}</strong> cafes available
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Filter status and Mobile filter toggle */}
+        <div className="flex items-center gap-2.5 justify-end">
+          {searchQuery && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-terracotta-50 border border-terracotta-200 rounded-xl text-xs text-terracotta-700">
+              <span>Searching: "{searchQuery}"</span>
+              <button onClick={() => setSearchQuery('')} className="hover:text-terracotta-900">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Mobile Filter Button */}
           <button
             onClick={() => setIsMobileFilterOpen(true)}
-            className="lg:hidden flex items-center gap-1.5 px-4 py-2.5 bg-espresso-900 text-white rounded-2xl text-xs font-bold shadow-warm shrink-0"
+            className="lg:hidden flex items-center gap-1.5 px-4 py-2.5 bg-espresso-900 hover:bg-espresso-850 text-white rounded-2xl text-xs font-bold shadow-warm shrink-0 transition-transform active:scale-95"
           >
             <SlidersHorizontal className="w-4 h-4" />
             <span>Filters ({activeFiltersCount})</span>
           </button>
         </div>
       </div>
+    </SectionOverlapBridge>
+  </div>
 
-      {/* Main Grid: Sidebar Filters + Cafe Cards */}
+  {/* Main Grid: Sidebar Filters + Cafe Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block lg:col-span-1">
@@ -473,7 +568,7 @@ export const DiscoveryPage: React.FC = () => {
             </div>
           )}
 
-          {/* Cafes Grid */}
+          {/* Cafes Grid with Staggered Entrance and 3D Tilt */}
           {filteredCafes.length === 0 ? (
             <EmptyState
               title="No cafes found"
@@ -483,8 +578,12 @@ export const DiscoveryPage: React.FC = () => {
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredCafes.map((cafe) => (
-                <CafeCard key={cafe.id} cafe={cafe} />
+              {filteredCafes.map((cafe, index) => (
+                <Reveal key={cafe.id} variant="fade-up" delayMs={(index % 6) * 50} durationMs={550}>
+                  <TiltCard maxTiltDeg={3} className="h-full">
+                    <CafeCard cafe={cafe} />
+                  </TiltCard>
+                </Reveal>
               ))}
             </div>
           )}

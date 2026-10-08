@@ -35,16 +35,18 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
   const { createReservation } = useData();
 
   // Generate next 10 days for selection
-  const today = new Date();
-  const dateOptions = Array.from({ length: 10 }, (_, i) => {
-    const d = new Date();
-    d.setDate(today.getDate() + i);
-    return {
-      iso: d.toISOString().split('T')[0],
-      dayName: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' }),
-      dateFormatted: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    };
-  });
+  const dateOptions = React.useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 10 }, (_, i) => {
+      const d = new Date();
+      d.setDate(today.getDate() + i);
+      return {
+        iso: d.toISOString().split('T')[0],
+        dayName: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' }),
+        dateFormatted: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      };
+    });
+  }, []);
 
   const [selectedDate, setSelectedDate] = useState(dateOptions[0].iso);
   const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[3]); // 12:30 PM
@@ -54,43 +56,49 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
   const [guestPhone, setGuestPhone] = useState(user?.phone || '+91 98765 43210');
   const [specialRequests, setSpecialRequests] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const [confirmedReservationCode, setConfirmedReservationCode] = useState('');
 
   if (!cafe) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!guestName || !guestEmail || !guestPhone) return;
 
-    const res = createReservation({
-      cafe_id: cafe.id,
-      cafe_name: cafe.name,
-      cafe_image: cafe.cover_image,
-      cafe_address: cafe.address,
-      guest_name: guestName,
-      guest_email: guestEmail,
-      guest_phone: guestPhone,
-      guest_count: guestCount,
-      reservation_date: selectedDate,
-      reservation_time: selectedTime,
-      special_requests: specialRequests.trim() || undefined,
-    });
+    setBookingError(null);
+    setIsSubmitting(true);
 
-    if (res.success && res.reservation) {
-      setConfirmedReservationCode(res.reservation.reservation_code);
-      setIsSuccess(true);
-    } else {
-      setConfirmedReservationCode(`RES-${Math.floor(100000 + Math.random() * 900000)}`);
-      setIsSuccess(true);
+    try {
+      const res = await createReservation({
+        cafe_id: cafe.id,
+        guest_name: guestName,
+        guest_email: guestEmail,
+        guest_phone: guestPhone,
+        guest_count: guestCount,
+        reservation_date: selectedDate,
+        reservation_time: selectedTime,
+        special_requests: specialRequests.trim() || undefined,
+      });
+
+      if (res.success && res.reservation) {
+        setConfirmedReservationCode(res.reservation.reservation_code);
+        setIsSuccess(true);
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#DE6441', '#8C6543', '#E2971B', '#FDFBF7'],
+        });
+      } else {
+        setBookingError(res.error || 'Failed to book table. Please verify date and cafe availability.');
+      }
+    } catch (err: any) {
+      setBookingError(err?.message || 'Error occurred while saving reservation.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Trigger celebratory confetti
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#DE6441', '#8C6543', '#E2971B', '#FDFBF7'],
-    });
   };
 
   const handleResetAndClose = () => {
@@ -301,14 +309,30 @@ export const TableBookingModal: React.FC<TableBookingModalProps> = ({
             </div>
           </div>
 
+          {bookingError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold">
+              {bookingError}
+            </div>
+          )}
+
           {/* Submit Button */}
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-3.5 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-sm rounded-2xl shadow-warm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>Confirm Free Table Reservation</span>
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Reserving Table...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Confirm Free Table Reservation</span>
+                </>
+              )}
             </button>
             <p className="text-[11px] text-center text-coffee-400 mt-2">
               No deposit required. Instant confirmation with SMS & in-app updates.

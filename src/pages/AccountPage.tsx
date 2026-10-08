@@ -7,12 +7,9 @@ import {
   Heart,
   MessageSquare,
   Settings,
-  Camera,
   Check,
   Star,
-  ArrowRight,
   LogOut,
-  Coffee,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -57,9 +54,9 @@ export const AccountPage: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
       {/* Header */}
-      <div className="bg-white p-6 sm:p-8 rounded-4xl border border-cream-200 shadow-warm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+      <div className="bg-white p-6 sm:p-8 rounded-4xl border border-cream-200 shadow-warm flex flex-col sm:flex-row sm:items-center justify-between gap-6 card-lift">
         <div className="flex items-center gap-4">
           <div className="relative">
             <img

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   Store,
@@ -18,21 +19,19 @@ import {
   DollarSign,
   Star,
   Users,
-  Search,
-  Filter,
-  Eye,
   Check,
   Upload,
-  Image as ImageIcon,
   AlertCircle,
-  Coffee,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, VegNonVegIndicator } from '../../components/common/Badge';
-import { MenuItem, OrderStatus, ReservationStatus, AmenityKey } from '../../types';
-import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { MenuItem, OrderStatus, AmenityKey } from '../../types';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { ownerService } from '../../services/ownerService';
+import { NumberTicker, Reveal } from '../../components/motion';
 
 interface OwnerDashboardProps {
   defaultTab?: 'overview' | 'orders' | 'reservations' | 'menu' | 'cafe' | 'reviews' | 'analytics' | 'settings';
@@ -56,8 +55,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
   } = useData();
   const { user } = useAuth();
 
-  // Find owner's cafe (Strictly isolated by owner_id; Admins fallback to first cafe for inspection)
-  const myCafe = cafes.find((c) => c.owner_id === user?.id) || (user?.role === 'admin' ? cafes[0] : undefined);
+  // Find owner's cafe (Strictly isolated by owner_id)
+  const myCafe = cafes.find((c) => c.owner_id === user?.id);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'reservations' | 'menu' | 'cafe' | 'reviews' | 'analytics' | 'settings'>(defaultTab);
 
@@ -148,34 +147,62 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
   const [minOrderAmount, setMinOrderAmount] = useState(150);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // File upload helper
-  const handleFileUpload = (file: File, onDone: (url: string) => void) => {
-    if (isSupabaseConfigured) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-      supabase.storage
-        .from('cafe-images')
-        .upload(fileName, file)
-        .then(({ data, error }) => {
-          if (!error && data) {
-            const { data: publicUrlData } = supabase.storage.from('cafe-images').getPublicUrl(fileName);
-            onDone(publicUrlData.publicUrl);
-            return;
-          }
-          const reader = new FileReader();
-          reader.onloadend = () => onDone(reader.result as string);
-          reader.readAsDataURL(file);
-        })
-        .catch(() => {
-          const reader = new FileReader();
-          reader.onloadend = () => onDone(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-    } else {
-      const reader = new FileReader();
-      reader.onloadend = () => onDone(reader.result as string);
-      reader.readAsDataURL(file);
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Sync amenities and menu categories from Supabase on load
+  useEffect(() => {
+    if (myCafe && isSupabaseConfigured) {
+      ownerService.getAmenities(myCafe.id).then((res) => {
+        if (res.success && res.amenities.length > 0) {
+          setAmenities(res.amenities);
+        }
+      });
+      ownerService.getMenuCategories(myCafe.id).then((res) => {
+        if (res.success && res.categories.length > 0) {
+          setCustomCategories(res.categories.map((c) => c.name));
+        }
+      });
     }
+  }, [myCafe]);
+
+  // Production-safe, tenant-scoped file upload helper
+  const handleFileUpload = async (file: File, onDone: (url: string) => void) => {
+    setUploadError(null);
+    setIsUploading(true);
+
+    if (myCafe && isSupabaseConfigured) {
+      try {
+        const res = await ownerService.uploadCafeImage(myCafe.id, file);
+        setIsUploading(false);
+        if (res.success && res.url) {
+          onDone(res.url);
+        } else {
+          setUploadError(res.error || 'Failed to upload image. Please try again.');
+        }
+      } catch (err: any) {
+        setIsUploading(false);
+        setUploadError(err.message || 'Image upload failed');
+      }
+      return;
+    }
+
+    // Validation for fallback
+    setIsUploading(false);
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      setUploadError('Invalid file type. Supported formats: JPG, PNG, WEBP, GIF.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('File is too large. Maximum size is 5 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => onDone(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   // Cafe data collections
@@ -225,10 +252,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
-  const handleSaveCafe = (e: React.FormEvent) => {
+  const handleSaveCafe = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!myCafe) return;
-    updateCafe(myCafe.id, {
+    await updateCafe(myCafe.id, {
       name: cafeName,
       tagline,
       description,
@@ -241,8 +268,24 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
       images: galleryImages,
       amenities,
     });
+    if (isSupabaseConfigured) {
+      await ownerService.updateAmenities(myCafe.id, amenities);
+    }
     setCafeSaved(true);
     setTimeout(() => setCafeSaved(false), 3000);
+  };
+
+  const handleSubmitForApproval = async () => {
+    if (!myCafe) return;
+    setIsSubmittingApproval(true);
+    try {
+      if (isSupabaseConfigured) {
+        await ownerService.submitCafeForApproval(myCafe.id);
+      }
+      await updateCafe(myCafe.id, { status: 'pending_approval' });
+    } finally {
+      setIsSubmittingApproval(false);
+    }
   };
 
   const handleCreateMenuItem = (e: React.FormEvent) => {
@@ -326,24 +369,39 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
 
   if (!myCafe) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-6">
-        <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600 mx-auto flex items-center justify-center">
-          <Store className="w-8 h-8" />
+      <div className="max-w-xl mx-auto px-4 py-12 space-y-6 animate-in fade-in text-center">
+        <div className="w-20 h-20 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600 mx-auto flex items-center justify-center shadow-warm">
+          <Store className="w-10 h-10" />
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-espresso-950">
-            No Cafe Linked Yet
+            Welcome to CafeHub Merchant Portal
           </h2>
-          <p className="text-xs text-coffee-600 max-w-md mx-auto">
-            You are authenticated with the Cafe Owner role, but do not currently have a cafe profile linked to your account.
+          <p className="text-xs text-coffee-600 max-w-md mx-auto leading-relaxed">
+            You don't have a registered cafe linked to your merchant account yet. Launch our guided 8-step onboarding wizard to register your brand, schedule, amenities, and menu items.
           </p>
         </div>
-        <div className="p-6 bg-cream-50 rounded-2xl border border-cream-200 max-w-md mx-auto text-xs text-coffee-600 space-y-3">
-          <p className="font-semibold text-espresso-900">For demonstration and test accounts:</p>
-          <div className="font-mono bg-white p-2.5 rounded-xl border border-cream-200 text-espresso-900 font-bold">
-            owner@subkocoffee.com / password123
+
+        <div className="pt-2">
+          <Link
+            to="/owner/onboarding"
+            className="inline-flex items-center gap-2 px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl transition-all shadow-warm hover:shadow-warm-md text-sm cursor-pointer"
+          >
+            <Sparkles className="w-5 h-5" />
+            <span>Launch Cafe Onboarding Wizard</span>
+          </Link>
+        </div>
+
+        <div className="p-4 bg-cream-50 rounded-2xl border border-cream-200 text-xs text-coffee-600 text-left space-y-1 mt-6">
+          <span className="font-bold text-espresso-900 block">What you'll set up:</span>
+          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+            <span>✓ Cafe Brand & Description</span>
+            <span>✓ Location & Contact Info</span>
+            <span>✓ 7-Day Operating Hours</span>
+            <span>✓ Venue Amenities & Perks</span>
+            <span>✓ Menu Categories & Items</span>
+            <span>✓ Logo & Atmosphere Photos</span>
           </div>
-          <p className="text-[11px] text-coffee-500">(Linked to Subko Coffee Roasters)</p>
         </div>
       </div>
     );
@@ -370,68 +428,154 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="success" size="md">
-                ● Store Open & Accepting Orders
-              </Badge>
+              {myCafe.status === 'approved' ? (
+                <Badge variant="success" size="md">
+                  ● Store Approved & Active
+                </Badge>
+              ) : myCafe.status === 'pending_approval' ? (
+                <Badge variant="warning" size="md">
+                  ⏳ Pending Platform Approval
+                </Badge>
+              ) : myCafe.status === 'rejected' ? (
+                <Badge variant="danger" size="md">
+                  ✕ Changes Requested
+                </Badge>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning" size="md">
+                    📝 Draft Mode
+                  </Badge>
+                  <button
+                    onClick={handleSubmitForApproval}
+                    disabled={isSubmittingApproval}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-espresso-950 font-bold rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
+                  >
+                    {isSubmittingApproval ? 'Submitting...' : 'Submit for Review'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Status Lifecycle Guidance Banner */}
+          {myCafe.status === 'draft' && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-bold">Setup In Progress: Store Not Yet Live</p>
+                  <p className="text-amber-700 text-[11px] mt-0.5">
+                    Complete your operating schedule, venue amenities, menu items, and photos to submit for customer activation.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/owner/onboarding"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer"
+              >
+                Resume Onboarding
+              </Link>
+            </div>
+          )}
+
+          {myCafe.status === 'pending_approval' && (
+            <div className="p-4 bg-amber-50/80 border border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 shadow-xs">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-amber-600 shrink-0 animate-pulse" />
+                <div>
+                  <p className="font-bold">Application Under Review</p>
+                  <p className="text-amber-700 text-[11px] mt-0.5">
+                    Your cafe details are currently being verified by CafeHub Administration. Live customer ordering will activate once approved.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/owner/onboarding"
+                className="px-4 py-2 bg-cream-100 hover:bg-cream-200 text-espresso-900 border border-cream-300 font-bold rounded-xl transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer"
+              >
+                View Submission
+              </Link>
+            </div>
+          )}
+
+          {myCafe.status === 'rejected' && (
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900 shadow-xs">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                <div>
+                  <p className="font-bold">Application Returned for Revision</p>
+                  <p className="text-rose-700 text-[11px] mt-0.5">
+                    Feedback: {myCafe.rejection_reason || 'Please adjust your cafe details and resubmit.'}
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/owner/onboarding"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer"
+              >
+                Edit & Resubmit
+              </Link>
+            </div>
+          )}
 
           {/* 4 Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2">
-              <div className="flex justify-between items-start">
-                <span className="text-xs text-coffee-500 font-bold uppercase">Total Revenue</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4" />
+          <Reveal variant="fade-up" durationMs={500}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs text-coffee-500 font-bold uppercase">Total Revenue</span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
                 </div>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={Math.round(todayRevenue)} prefix="₹" />
+                </div>
+                <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Real-time order revenue
+                </span>
               </div>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                ₹{todayRevenue.toFixed(0)}
-              </div>
-              <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> Real-time order revenue
-              </span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2">
-              <div className="flex justify-between items-start">
-                <span className="text-xs text-coffee-500 font-bold uppercase">Orders Processed</span>
-                <div className="w-8 h-8 rounded-xl bg-terracotta-50 text-terracotta-700 flex items-center justify-center">
-                  <ShoppingBag className="w-4 h-4" />
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs text-coffee-500 font-bold uppercase">Orders Processed</span>
+                  <div className="w-8 h-8 rounded-xl bg-terracotta-50 text-terracotta-700 flex items-center justify-center">
+                    <ShoppingBag className="w-4 h-4" />
+                  </div>
                 </div>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={todayOrdersCount} />
+                </div>
+                <span className="text-[11px] text-coffee-500 font-medium">Avg Order Value: ₹{avgOrderValue}</span>
               </div>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                {todayOrdersCount}
-              </div>
-              <span className="text-[11px] text-coffee-500 font-medium">Avg Order Value: ₹{avgOrderValue}</span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2">
-              <div className="flex justify-between items-start">
-                <span className="text-xs text-coffee-500 font-bold uppercase">Table Bookings</span>
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                  <Calendar className="w-4 h-4" />
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs text-coffee-500 font-bold uppercase">Table Bookings</span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                    <Calendar className="w-4 h-4" />
+                  </div>
                 </div>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  <NumberTicker value={upcomingResCount} />
+                </div>
+                <span className="text-[11px] text-emerald-600 font-semibold">Active reservations</span>
               </div>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                {upcomingResCount}
-              </div>
-              <span className="text-[11px] text-emerald-600 font-semibold">Active reservations</span>
-            </div>
 
-            <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2">
-              <div className="flex justify-between items-start">
-                <span className="text-xs text-coffee-500 font-bold uppercase">Cafe Rating</span>
-                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
-                  <Star className="w-4 h-4 fill-amber-500" />
+              <div className="bg-white p-5 rounded-3xl border border-cream-200 shadow-warm space-y-2 card-lift hover:shadow-warm-md hover:border-cream-300 transition-all">
+                <div className="flex justify-between items-start">
+                  <span className="text-xs text-coffee-500 font-bold uppercase">Cafe Rating</span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                    <Star className="w-4 h-4 fill-amber-500 star-glow" />
+                  </div>
                 </div>
+                <div className="text-2xl font-serif font-bold text-espresso-950">
+                  {myCafe.rating} ★
+                </div>
+                <span className="text-[11px] text-coffee-400">From {myCafe.review_count} verified reviews</span>
               </div>
-              <div className="text-2xl font-serif font-bold text-espresso-950">
-                {myCafe.rating} ★
-              </div>
-              <span className="text-[11px] text-coffee-400">From {myCafe.review_count} verified reviews</span>
             </div>
-          </div>
+          </Reveal>
 
           {/* Quick Actions & Recent Orders Preview */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -625,31 +769,55 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
                       )}
                     </div>
 
-                    {/* Operational Action Pipeline Buttons */}
+                    {/* Operational Action Pipeline Buttons (Controlled Transitions) */}
                     <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
                       {order.status === 'order_placed' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'confirmed')}
-                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
-                        >
-                          Accept & Confirm
-                        </button>
+                        <>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'confirmed')}
+                            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
+                          >
+                            Accept & Confirm
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors"
+                          >
+                            Decline
+                          </button>
+                        </>
                       )}
                       {order.status === 'confirmed' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'preparing')}
-                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
-                        >
-                          Start Preparing
-                        </button>
+                        <>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'preparing')}
+                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
+                          >
+                            Start Preparing
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
                       )}
                       {order.status === 'preparing' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'ready')}
-                          className="px-3.5 py-1.5 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
-                        >
-                          Mark Ready
-                        </button>
+                        <>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'ready')}
+                            className="px-3.5 py-1.5 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-xs rounded-xl shadow-warm transition-all"
+                          >
+                            Mark Ready
+                          </button>
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
                       )}
                       {order.status === 'ready' && (
                         <button
@@ -659,28 +827,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
                           Mark Completed
                         </button>
                       )}
-                      {order.status !== 'completed' && order.status !== 'cancelled' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      )}
-
-                      {/* Manual Override dropdown */}
-                      <select
-                        value={order.status}
-                        onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
-                        className="bg-white border border-cream-300 font-bold text-xs rounded-xl px-2.5 py-1.5 text-espresso-900 outline-none shadow-xs cursor-pointer ml-1"
-                      >
-                        <option value="order_placed">Placed</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="preparing">Preparing</option>
-                        <option value="ready">Ready</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
                     </div>
                   </div>
 
@@ -784,11 +930,27 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {res.status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => updateReservationStatus(res.id, 'confirmed')}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
+                        >
+                          Accept Booking
+                        </button>
+                        <button
+                          onClick={() => updateReservationStatus(res.id, 'rejected')}
+                          className="px-3.5 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold rounded-xl transition-colors"
+                        >
+                          Decline
+                        </button>
+                      </>
+                    )}
                     {res.status === 'confirmed' && (
                       <>
                         <button
                           onClick={() => updateReservationStatus(res.id, 'completed')}
-                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors"
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors shadow-xs"
                         >
                           Seat Guests
                         </button>
@@ -799,14 +961,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
                           Cancel
                         </button>
                       </>
-                    )}
-                    {res.status !== 'confirmed' && res.status !== 'completed' && (
-                      <button
-                        onClick={() => updateReservationStatus(res.id, 'confirmed')}
-                        className="px-3.5 py-1.5 bg-espresso-900 hover:bg-espresso-800 text-white font-bold rounded-xl transition-colors"
-                      >
-                        Re-confirm
-                      </button>
                     )}
                   </div>
                 </div>
@@ -1249,6 +1403,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ defaultTab = 'ov
               <label className="text-xs font-bold text-espresso-900 block">
                 Primary Storefront Cover Photo
               </label>
+              {uploadError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2 text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+              {isUploading && (
+                <div className="p-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl flex items-center gap-2 text-xs">
+                  <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                  <span>Uploading image to secure storage...</span>
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-cream-50 rounded-2xl border border-cream-200">
                 <img
                   src={coverImage}

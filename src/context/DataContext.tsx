@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Cafe,
   MenuItem,
@@ -8,6 +8,7 @@ import {
   ReservationStatus,
   Review,
   InAppNotification,
+  OrderType,
 } from '../types';
 import {
   SEED_CAFES,
@@ -18,6 +19,11 @@ import {
   SEED_NOTIFICATIONS,
 } from '../data/seedData';
 import { useAuth } from './AuthContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { ownerService } from '../services/ownerService';
+import { orderService } from '../services/orderService';
+import { reservationService } from '../services/reservationService';
+import { reviewService } from '../services/reviewService';
 
 interface DataContextType {
   // Public or role-filtered collections
@@ -28,36 +34,69 @@ interface DataContextType {
   reviews: Review[];
   favorites: string[];
   notifications: InAppNotification[];
+  refreshData: () => Promise<void>;
 
   // Cafe operations (Strictly Authorized)
-  addCafe: (cafe: Omit<Cafe, 'id' | 'created_at' | 'rating' | 'review_count' | 'owner_id'>) => { success: boolean; cafe?: Cafe; error?: string };
-  updateCafe: (id: string, updates: Partial<Cafe>) => { success: boolean; error?: string };
-  approveCafe: (id: string) => { success: boolean; error?: string };
-  suspendCafe: (id: string) => { success: boolean; error?: string };
+  addCafe: (cafe: Omit<Cafe, 'id' | 'created_at' | 'rating' | 'review_count' | 'owner_id' | 'is_approved'> & { is_approved?: boolean }) => Promise<{ success: boolean; cafe?: Cafe; error?: string }>;
+  updateCafe: (id: string, updates: Partial<Cafe>) => Promise<{ success: boolean; error?: string }>;
+  syncOwnerCafe: (cafe: Cafe) => void;
+  approveCafe: (id: string) => Promise<{ success: boolean; error?: string }>;
+  rejectCafe: (id: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  suspendCafe: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Menu operations (Owner/Admin only)
-  addMenuItem: (item: Omit<MenuItem, 'id'>) => { success: boolean; item?: MenuItem; error?: string };
-  updateMenuItem: (id: string, updates: Partial<MenuItem>) => { success: boolean; error?: string };
-  deleteMenuItem: (id: string) => { success: boolean; error?: string };
-  toggleItemAvailability: (id: string) => { success: boolean; error?: string };
+  addMenuItem: (item: Omit<MenuItem, 'id'>) => Promise<{ success: boolean; item?: MenuItem; error?: string }>;
+  updateMenuItem: (id: string, updates: Partial<MenuItem>) => Promise<{ success: boolean; error?: string }>;
+  deleteMenuItem: (id: string) => Promise<{ success: boolean; error?: string }>;
+  toggleItemAvailability: (id: string) => Promise<{ success: boolean; error?: string }>;
 
   // Orders (Customer creates; Owner/Admin manages)
-  createOrder: (orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'status' | 'user_id'>) => { success: boolean; order?: Order; error?: string };
-  updateOrderStatus: (orderId: string, status: OrderStatus) => { success: boolean; error?: string };
+  createOrder: (orderData: {
+    cafe_id: string;
+    order_type: OrderType;
+    items: {
+      menu_item_id: string;
+      quantity: number;
+      customizations?: Record<string, string>;
+    }[];
+    customer_name: string;
+    customer_phone: string;
+    customer_email: string;
+    delivery_address?: string;
+    delivery_city?: string;
+    delivery_postal_code?: string;
+    dine_in_table?: string;
+    notes?: string;
+    payment_method?: 'UPI / Card' | 'Cash on Pickup' | 'Card at Cafe';
+  }) => Promise<{ success: boolean; order?: Order; error?: string }>;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<{ success: boolean; error?: string }>;
 
   // Reservations
-  createReservation: (resData: Omit<Reservation, 'id' | 'reservation_code' | 'created_at' | 'status' | 'user_id'>) => { success: boolean; reservation?: Reservation; error?: string };
-  updateReservationStatus: (resId: string, status: ReservationStatus) => { success: boolean; error?: string };
-  cancelReservation: (resId: string) => { success: boolean; error?: string };
+  createReservation: (resData: {
+    cafe_id: string;
+    guest_name: string;
+    guest_email: string;
+    guest_phone: string;
+    guest_count: number;
+    reservation_date: string;
+    reservation_time: string;
+    special_requests?: string;
+  }) => Promise<{ success: boolean; reservation?: Reservation; error?: string }>;
+  updateReservationStatus: (resId: string, status: ReservationStatus) => Promise<{ success: boolean; error?: string }>;
+  cancelReservation: (resId: string) => Promise<{ success: boolean; error?: string }>;
 
   // Favorites
   toggleFavorite: (cafeId: string) => void;
   isFavorite: (cafeId: string) => boolean;
 
   // Reviews
-  addReview: (reviewData: Omit<Review, 'id' | 'created_at' | 'user_id' | 'user_name'>) => { success: boolean; error?: string };
-  replyToReview: (reviewId: string, response: string) => { success: boolean; error?: string };
-  deleteReview: (reviewId: string) => { success: boolean; error?: string };
+  addReview: (reviewData: {
+    cafe_id: string;
+    rating: number;
+    comment: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  replyToReview: (reviewId: string, response: string) => Promise<{ success: boolean; error?: string }>;
+  deleteReview: (reviewId: string) => Promise<{ success: boolean; error?: string }>;
 
   // Notifications
   markNotificationRead: (id: string) => void;
@@ -100,6 +139,118 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   }, [data]);
 
+  // Synchronize with Supabase database
+  const refreshData = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+
+    try {
+      const [cafesRes, menuItemsRes, ordersRes, resRes, revsRes] = await Promise.all([
+        supabase.from('cafes').select('*'),
+        supabase.from('menu_items').select('*'),
+        orderService.getOrders({
+          userId: user?.id,
+          role: user?.role,
+          ownedCafeIds: user?.role === 'cafe_owner'
+            ? data.cafes.filter((c: Cafe) => c.owner_id === user.id).map((c: Cafe) => c.id)
+            : undefined,
+        }),
+        reservationService.getReservations({
+          userId: user?.id,
+          role: user?.role,
+          ownedCafeIds: user?.role === 'cafe_owner'
+            ? data.cafes.filter((c: Cafe) => c.owner_id === user.id).map((c: Cafe) => c.id)
+            : undefined,
+        }),
+        reviewService.getReviews(),
+      ]);
+
+      setData((prev: typeof data) => {
+        let nextCafes = prev.cafes;
+        if (cafesRes.data && cafesRes.data.length > 0) {
+          const dbCafeMap = new Map(cafesRes.data.map((c: any) => [c.id, c]));
+          nextCafes = [
+            ...cafesRes.data,
+            ...prev.cafes.filter((c: Cafe) => !dbCafeMap.has(c.id)),
+          ];
+        }
+
+        let nextMenuItems = prev.menuItems;
+        if (menuItemsRes.data && menuItemsRes.data.length > 0) {
+          const dbItemMap = new Map(menuItemsRes.data.map((i: any) => [i.id, i]));
+          nextMenuItems = [
+            ...menuItemsRes.data,
+            ...prev.menuItems.filter((i: MenuItem) => !dbItemMap.has(i.id)),
+          ];
+        }
+
+        let nextOrders = prev.orders;
+        if (ordersRes.success && ordersRes.orders) {
+          const orderMap = new Map(ordersRes.orders.map((o: Order) => [o.id, o]));
+          nextOrders = [
+            ...ordersRes.orders,
+            ...prev.orders.filter((o: Order) => !orderMap.has(o.id)),
+          ];
+        }
+
+        let nextReservations = prev.reservations;
+        if (resRes.success && resRes.reservations) {
+          const resMap = new Map(resRes.reservations.map((r: Reservation) => [r.id, r]));
+          nextReservations = [
+            ...resRes.reservations,
+            ...prev.reservations.filter((r: Reservation) => !resMap.has(r.id)),
+          ];
+        }
+
+        let nextReviews = prev.reviews;
+        if (revsRes.success && revsRes.reviews) {
+          const revMap = new Map(revsRes.reviews.map((r: Review) => [r.id, r]));
+          nextReviews = [
+            ...revsRes.reviews,
+            ...prev.reviews.filter((r: Review) => !revMap.has(r.id)),
+          ];
+        }
+
+        return {
+          ...prev,
+          cafes: nextCafes,
+          menuItems: nextMenuItems,
+          orders: nextOrders,
+          reservations: nextReservations,
+          reviews: nextReviews,
+        };
+      });
+    } catch (err) {
+      console.warn('DataContext Supabase synchronization error:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshData();
+
+    if (isSupabaseConfigured) {
+      // Wire up Supabase Realtime channel for live customer <-> owner synchronization
+      const channel = supabase
+        .channel('cafehub_realtime_data')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+          refreshData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => {
+          refreshData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reviews' }, () => {
+          refreshData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cafes' }, () => {
+          refreshData();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [refreshData]);
+
   // Find cafes owned by current user (if cafe_owner)
   const myOwnedCafeIds = useMemo(() => {
     if (!user) return [];
@@ -117,15 +268,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Admin can view all cafes.
   const authorizedCafes = useMemo(() => {
     if (!user) {
-      return data.cafes.filter((c: Cafe) => c.is_approved);
+      return data.cafes.filter((c: Cafe) => c.is_approved && (!c.status || c.status === 'approved'));
     }
     if (user.role === 'admin') {
       return data.cafes;
     }
     if (user.role === 'cafe_owner') {
-      return data.cafes.filter((c: Cafe) => c.is_approved || c.owner_id === user.id);
+      return data.cafes.filter((c: Cafe) => (c.is_approved && (!c.status || c.status === 'approved')) || c.owner_id === user.id);
     }
-    return data.cafes.filter((c: Cafe) => c.is_approved);
+    return data.cafes.filter((c: Cafe) => c.is_approved && (!c.status || c.status === 'approved'));
   }, [data.cafes, user]);
 
   // Orders:
@@ -158,8 +309,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.reservations.filter((r: Reservation) => r.user_id === user.id);
   }, [data.reservations, user, myOwnedCafeIds]);
 
-  // Notifications:
-  // Isolated per user
+  // Notifications: Isolated per user
   const authorizedNotifications = useMemo(() => {
     if (!user) return [];
     return data.notifications.filter((n: InAppNotification) => n.user_id === user.id || n.user_id === 'current-user');
@@ -209,7 +359,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Cafe operations
-  const addCafe = (newCafeData: Omit<Cafe, 'id' | 'created_at' | 'rating' | 'review_count' | 'owner_id'>) => {
+  const addCafe = async (newCafeData: Omit<Cafe, 'id' | 'created_at' | 'rating' | 'review_count' | 'owner_id' | 'is_approved'> & { is_approved?: boolean }) => {
     if (!user) {
       return { success: false, error: 'Authentication required: Please log in to list a cafe.' };
     }
@@ -217,13 +367,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Forbidden: Only cafe owners or administrators can list new cafes.' };
     }
 
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.createOwnerCafe({
+        owner_id: user.id,
+        name: newCafeData.name,
+        tagline: newCafeData.tagline,
+        description: newCafeData.description,
+        address: newCafeData.address,
+        city: newCafeData.city,
+        state: newCafeData.state,
+        postal_code: newCafeData.postal_code,
+        phone: newCafeData.phone,
+        email: newCafeData.email,
+        cover_image: newCafeData.cover_image,
+      });
+
+      if (!dbRes.success || !dbRes.cafe) {
+        return { success: false, error: dbRes.error || 'Failed to create cafe in Supabase database' };
+      }
+
+      setData((prev: typeof data) => ({
+        ...prev,
+        cafes: [dbRes.cafe!, ...prev.cafes],
+      }));
+
+      addNotification(
+        'New Cafe Submitted ☕',
+        `${dbRes.cafe.name} has been created and saved to the database.`,
+        'cafe',
+        `/cafes/${dbRes.cafe.id}`
+      );
+
+      return { success: true, cafe: dbRes.cafe };
+    }
+
+    // Local fallback
     const newCafe: Cafe = {
       ...newCafeData,
       id: `cafe-${Date.now()}`,
-      owner_id: user.id, // Strictly tied to authenticated user ID
+      owner_id: user.id,
       rating: 5.0,
       review_count: 0,
-      is_approved: user.role === 'admin', // Auto-approved if admin, else pending
+      is_approved: user.role === 'admin',
+      status: user.role === 'admin' ? 'approved' : 'draft',
       created_at: new Date().toISOString(),
     };
 
@@ -242,7 +428,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, cafe: newCafe };
   };
 
-  const updateCafe = (id: string, updates: Partial<Cafe>) => {
+  const updateCafe = async (id: string, updates: Partial<Cafe>) => {
     if (!user) {
       return { success: false, error: 'Authentication required.' };
     }
@@ -252,18 +438,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Cafe not found.' };
     }
 
-    // CROSS-TENANT SECURITY CHECK:
-    // Owner A must NEVER be able to edit Owner B's cafe!
     if (user.role !== 'admin' && targetCafe.owner_id !== user.id) {
-      console.warn(`SECURITY VIOLATION: User ${user.id} attempted to edit unauthorized cafe ${id} owned by ${targetCafe.owner_id}`);
       return { success: false, error: 'Access Denied: You do not have permission to manage this cafe.' };
     }
 
-    // Non-admins cannot alter is_approved or owner_id
     const safeUpdates = { ...updates };
     if (user.role !== 'admin') {
       delete safeUpdates.is_approved;
       delete safeUpdates.owner_id;
+      delete safeUpdates.rejection_reason;
+      delete safeUpdates.approved_at;
+    }
+
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.updateOwnerCafe(id, safeUpdates);
+      if (!dbRes.success) {
+        return { success: false, error: dbRes.error || 'Failed to update cafe in database' };
+      }
     }
 
     setData((prev: typeof data) => ({
@@ -274,34 +465,93 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const approveCafe = (id: string) => {
+  const syncOwnerCafe = (updatedCafe: Cafe) => {
+    setData((prev: typeof data) => {
+      const exists = prev.cafes.some((c: Cafe) => c.id === updatedCafe.id);
+      return {
+        ...prev,
+        cafes: exists
+          ? prev.cafes.map((c: Cafe) => (c.id === updatedCafe.id ? { ...c, ...updatedCafe } : c))
+          : [updatedCafe, ...prev.cafes],
+      };
+    });
+  };
+
+  const approveCafe = async (id: string) => {
     if (!user || user.role !== 'admin') {
       return { success: false, error: 'Access Denied: Only administrators can approve cafes.' };
     }
 
+    const res = await ownerService.adminApproveCafe(id);
+    if (!res.success) {
+      return { success: false, error: res.error || 'Failed to approve cafe' };
+    }
+
     setData((prev: typeof data) => ({
       ...prev,
-      cafes: prev.cafes.map((c: Cafe) => (c.id === id ? { ...c, is_approved: true } : c)),
+      cafes: prev.cafes.map((c: Cafe) =>
+        c.id === id
+          ? { ...c, is_approved: true, status: 'approved', approved_at: new Date().toISOString() }
+          : c
+      ),
     }));
 
     return { success: true };
   };
 
-  const suspendCafe = (id: string) => {
+  const rejectCafe = async (id: string, reason: string) => {
     if (!user || user.role !== 'admin') {
-      return { success: false, error: 'Access Denied: Only administrators can suspend cafes.' };
+      return { success: false, error: 'Access Denied: Only administrators can reject cafes.' };
+    }
+
+    const res = await ownerService.adminRejectCafe(id, reason);
+    if (!res.success) {
+      return { success: false, error: res.error || 'Failed to reject cafe' };
     }
 
     setData((prev: typeof data) => ({
       ...prev,
-      cafes: prev.cafes.map((c: Cafe) => (c.id === id ? { ...c, is_approved: false } : c)),
+      cafes: prev.cafes.map((c: Cafe) =>
+        c.id === id
+          ? { ...c, is_approved: false, status: 'rejected', rejection_reason: reason.trim() }
+          : c
+      ),
+    }));
+
+    return { success: true };
+  };
+
+  const suspendCafe = async (id: string) => {
+    if (!user || user.role !== 'admin') {
+      return { success: false, error: 'Access Denied: Only administrators can suspend cafes.' };
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('cafes')
+        .update({
+          is_approved: false,
+          status: 'suspended',
+        })
+        .eq('id', id);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+    }
+
+    setData((prev: typeof data) => ({
+      ...prev,
+      cafes: prev.cafes.map((c: Cafe) =>
+        c.id === id ? { ...c, is_approved: false, status: 'suspended' } : c
+      ),
     }));
 
     return { success: true };
   };
 
   // Menu operations
-  const addMenuItem = (item: Omit<MenuItem, 'id'>) => {
+  const addMenuItem = async (item: Omit<MenuItem, 'id'>) => {
     if (!user) {
       return { success: false, error: 'Authentication required.' };
     }
@@ -311,10 +561,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Target cafe does not exist.' };
     }
 
-    // CROSS-TENANT CHECK:
-    // Owner A cannot add menu items to Owner B's cafe
     if (user.role !== 'admin' && targetCafe.owner_id !== user.id) {
       return { success: false, error: 'Access Denied: You cannot modify another owner’s menu.' };
+    }
+
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.createMenuItem(item);
+      if (!dbRes.success || !dbRes.item) {
+        return { success: false, error: dbRes.error || 'Failed to save menu item to database' };
+      }
+
+      setData((prev: typeof data) => ({
+        ...prev,
+        menuItems: [dbRes.item!, ...prev.menuItems],
+      }));
+
+      return { success: true, item: dbRes.item };
     }
 
     const newItem: MenuItem = {
@@ -330,7 +592,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, item: newItem };
   };
 
-  const updateMenuItem = (id: string, updates: Partial<MenuItem>) => {
+  const updateMenuItem = async (id: string, updates: Partial<MenuItem>) => {
     if (!user) {
       return { success: false, error: 'Authentication required.' };
     }
@@ -345,6 +607,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Access Denied: You cannot modify another owner’s menu item.' };
     }
 
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.updateMenuItem(id, updates);
+      if (!dbRes.success) {
+        return { success: false, error: dbRes.error || 'Failed to update menu item in database' };
+      }
+    }
+
     setData((prev: typeof data) => ({
       ...prev,
       menuItems: prev.menuItems.map((m: MenuItem) => (m.id === id ? { ...m, ...updates } : m)),
@@ -353,7 +622,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const deleteMenuItem = (id: string) => {
+  const deleteMenuItem = async (id: string) => {
     if (!user) {
       return { success: false, error: 'Authentication required.' };
     }
@@ -368,6 +637,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Access Denied: You cannot delete another owner’s menu item.' };
     }
 
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.deleteMenuItem(id);
+      if (!dbRes.success) {
+        return { success: false, error: dbRes.error || 'Failed to delete menu item from database' };
+      }
+    }
+
     setData((prev: typeof data) => ({
       ...prev,
       menuItems: prev.menuItems.filter((m: MenuItem) => m.id !== id),
@@ -376,7 +652,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const toggleItemAvailability = (id: string) => {
+  const toggleItemAvailability = async (id: string) => {
     if (!user) return { success: false, error: 'Authentication required.' };
 
     const targetItem = data.menuItems.find((m: MenuItem) => m.id === id);
@@ -387,31 +663,73 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Access Denied: You cannot change availability for another cafe.' };
     }
 
+    const nextAvailability = !targetItem.is_available;
+
+    if (isSupabaseConfigured) {
+      const dbRes = await ownerService.updateMenuItemAvailability(id, nextAvailability);
+      if (!dbRes.success) {
+        return { success: false, error: dbRes.error || 'Failed to toggle availability in database' };
+      }
+    }
+
     setData((prev: typeof data) => ({
       ...prev,
       menuItems: prev.menuItems.map((m: MenuItem) =>
-        m.id === id ? { ...m, is_available: !m.is_available } : m
+        m.id === id ? { ...m, is_available: nextAvailability } : m
       ),
     }));
 
     return { success: true };
   };
 
-  // Orders
-  const createOrder = (orderData: Omit<Order, 'id' | 'order_number' | 'created_at' | 'status' | 'user_id'>) => {
+  // Orders: Complete with server validation & Supabase persistence
+  const createOrder = async (orderData: {
+    cafe_id: string;
+    order_type: OrderType;
+    items: {
+      menu_item_id: string;
+      quantity: number;
+      customizations?: Record<string, string>;
+    }[];
+    customer_name: string;
+    customer_phone: string;
+    customer_email: string;
+    delivery_address?: string;
+    delivery_city?: string;
+    delivery_postal_code?: string;
+    dine_in_table?: string;
+    notes?: string;
+    payment_method?: 'UPI / Card' | 'Cash on Pickup' | 'Card at Cafe';
+  }) => {
     if (!user) {
       return { success: false, error: 'Authentication required: Please log in to complete your order.' };
     }
 
-    const orderNumber = `CH-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newOrder: Order = {
-      ...orderData,
-      id: `order-${Date.now()}`,
-      user_id: user.id, // Strictly tied to authenticated user ID
-      order_number: orderNumber,
-      created_at: new Date().toISOString(),
-      status: 'order_placed',
-    };
+    const res = await orderService.createOrder({
+      userId: user.id,
+      cafeId: orderData.cafe_id,
+      orderType: orderData.order_type,
+      items: orderData.items.map((i) => ({
+        menuItemId: i.menu_item_id,
+        quantity: i.quantity,
+        customizations: i.customizations,
+      })),
+      customerName: orderData.customer_name,
+      customerPhone: orderData.customer_phone,
+      customerEmail: orderData.customer_email,
+      deliveryAddress: orderData.delivery_address,
+      deliveryCity: orderData.delivery_city,
+      deliveryPostalCode: orderData.delivery_postal_code,
+      dineInTable: orderData.dine_in_table,
+      notes: orderData.notes,
+      paymentMethod: orderData.payment_method || 'UPI / Card',
+    });
+
+    if (!res.success || !res.order) {
+      return { success: false, error: res.error || 'Failed to create order.' };
+    }
+
+    const newOrder = res.order;
 
     setData((prev: typeof data) => ({
       ...prev,
@@ -420,7 +738,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     addNotification(
       'Order Confirmed! 🛍️',
-      `Order #${orderNumber} placed with ${newOrder.cafe_name}. Total: ₹${newOrder.total_amount}.`,
+      `Order #${newOrder.order_number} placed with ${newOrder.cafe_name}. Total: ₹${newOrder.total_amount}.`,
       'order',
       '/orders'
     );
@@ -428,21 +746,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, order: newOrder };
   };
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     if (!user) {
       return { success: false, error: 'Authentication required.' };
     }
 
-    const targetOrder = data.orders.find((o: Order) => o.id === orderId);
-    if (!targetOrder) {
-      return { success: false, error: 'Order not found.' };
-    }
+    const res = await orderService.updateOrderStatus(orderId, status, {
+      userId: user.id,
+      role: user.role,
+      ownedCafeIds: myOwnedCafeIds,
+    });
 
-    const targetCafe = data.cafes.find((c: Cafe) => c.id === targetOrder.cafe_id);
-
-    // Only the cafe owner of this order or admin can change order status
-    if (user.role !== 'admin' && targetCafe?.owner_id !== user.id) {
-      return { success: false, error: 'Access Denied: You cannot modify orders for another cafe.' };
+    if (!res.success) {
+      return { success: false, error: res.error };
     }
 
     setData((prev: typeof data) => ({
@@ -453,23 +769,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  // Reservations
-  const createReservation = (
-    resData: Omit<Reservation, 'id' | 'reservation_code' | 'created_at' | 'status' | 'user_id'>
-  ) => {
+  // Reservations: Complete with Supabase persistence
+  const createReservation = async (resData: {
+    cafe_id: string;
+    guest_name: string;
+    guest_email: string;
+    guest_phone: string;
+    guest_count: number;
+    reservation_date: string;
+    reservation_time: string;
+    special_requests?: string;
+  }) => {
     if (!user) {
       return { success: false, error: 'Authentication required: Please log in to book a table.' };
     }
 
-    const code = `RES-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newRes: Reservation = {
-      ...resData,
-      id: `res-${Date.now()}`,
-      user_id: user.id, // Strictly tied to authenticated user ID
-      reservation_code: code,
-      status: 'confirmed',
-      created_at: new Date().toISOString(),
-    };
+    const res = await reservationService.createReservation({
+      userId: user.id,
+      cafeId: resData.cafe_id,
+      guestName: resData.guest_name,
+      guestEmail: resData.guest_email,
+      guestPhone: resData.guest_phone,
+      guestCount: resData.guest_count,
+      reservationDate: resData.reservation_date,
+      reservationTime: resData.reservation_time,
+      specialRequests: resData.special_requests,
+    });
+
+    if (!res.success || !res.reservation) {
+      return { success: false, error: res.error || 'Failed to book table.' };
+    }
+
+    const newRes = res.reservation;
 
     setData((prev: typeof data) => ({
       ...prev,
@@ -486,26 +817,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, reservation: newRes };
   };
 
-  const updateReservationStatus = (resId: string, status: ReservationStatus) => {
+  const updateReservationStatus = async (resId: string, status: ReservationStatus) => {
     if (!user) return { success: false, error: 'Authentication required.' };
 
-    const targetRes = data.reservations.find((r: Reservation) => r.id === resId);
-    if (!targetRes) return { success: false, error: 'Reservation not found.' };
+    const res = await reservationService.updateReservationStatus(resId, status, {
+      userId: user.id,
+      role: user.role,
+      ownedCafeIds: myOwnedCafeIds,
+    });
 
-    const targetCafe = data.cafes.find((c: Cafe) => c.id === targetRes.cafe_id);
-
-    // Customer can only cancel their own reservation
-    if (user.role === 'customer') {
-      if (targetRes.user_id !== user.id) {
-        return { success: false, error: 'Access Denied: You cannot modify another customer’s reservation.' };
-      }
-      if (status !== 'cancelled') {
-        return { success: false, error: 'Customers may only cancel their own reservation.' };
-      }
-    } else if (user.role === 'cafe_owner') {
-      if (targetCafe?.owner_id !== user.id) {
-        return { success: false, error: 'Access Denied: You cannot modify reservations for another cafe.' };
-      }
+    if (!res.success) {
+      return { success: false, error: res.error };
     }
 
     setData((prev: typeof data) => ({
@@ -518,7 +840,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const cancelReservation = (resId: string) => {
+  const cancelReservation = async (resId: string) => {
     return updateReservationStatus(resId, 'cancelled');
   };
 
@@ -543,22 +865,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Reviews
-  const addReview = (reviewData: Omit<Review, 'id' | 'created_at' | 'user_id' | 'user_name'>) => {
+  const addReview = async (reviewData: {
+    cafe_id: string;
+    rating: number;
+    comment: string;
+  }) => {
     if (!user) {
       return { success: false, error: 'Authentication required to write reviews.' };
     }
 
-    const newReview: Review = {
-      ...reviewData,
-      id: `rev-${Date.now()}`,
-      user_id: user.id,
-      user_name: user.full_name,
-      user_avatar: user.avatar_url,
-      created_at: new Date().toISOString(),
-    };
+    const res = await reviewService.addReview({
+      userId: user.id,
+      cafeId: reviewData.cafe_id,
+      rating: reviewData.rating,
+      comment: reviewData.comment,
+      userName: user.full_name,
+      userAvatar: user.avatar_url,
+    });
+
+    if (!res.success || !res.review) {
+      return { success: false, error: res.error || 'Failed to publish review.' };
+    }
+
+    const savedReview = res.review;
 
     setData((prev: typeof data) => {
-      const updatedReviews = [newReview, ...prev.reviews];
+      const existingIdx = prev.reviews.findIndex(
+        (r: Review) => r.user_id === user.id && r.cafe_id === reviewData.cafe_id
+      );
+      let updatedReviews: Review[];
+      if (existingIdx > -1) {
+        updatedReviews = prev.reviews.map((r: Review, i: number) =>
+          i === existingIdx ? savedReview : r
+        );
+      } else {
+        updatedReviews = [savedReview, ...prev.reviews];
+      }
+
       const cafeReviews = updatedReviews.filter((r) => r.cafe_id === reviewData.cafe_id);
       const avgRating =
         cafeReviews.reduce((sum, r) => sum + r.rating, 0) / (cafeReviews.length || 1);
@@ -584,15 +927,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const replyToReview = (reviewId: string, response: string) => {
+  const replyToReview = async (reviewId: string, response: string) => {
     if (!user) return { success: false, error: 'Authentication required.' };
 
-    const targetRev = data.reviews.find((r: Review) => r.id === reviewId);
-    if (!targetRev) return { success: false, error: 'Review not found.' };
+    const res = await reviewService.replyToReview(reviewId, response, {
+      userId: user.id,
+      role: user.role,
+      ownedCafeIds: myOwnedCafeIds,
+    });
 
-    const targetCafe = data.cafes.find((c: Cafe) => c.id === targetRev.cafe_id);
-    if (user.role !== 'admin' && targetCafe?.owner_id !== user.id) {
-      return { success: false, error: 'Access Denied: You cannot reply to reviews for another cafe.' };
+    if (!res.success) {
+      return { success: false, error: res.error };
     }
 
     setData((prev: typeof data) => ({
@@ -607,9 +952,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const deleteReview = (reviewId: string) => {
+  const deleteReview = async (reviewId: string) => {
     if (!user || user.role !== 'admin') {
       return { success: false, error: 'Access Denied: Only administrators can moderate reviews.' };
+    }
+
+    const res = await reviewService.deleteReview(reviewId, { role: user.role });
+    if (!res.success) {
+      return { success: false, error: res.error };
     }
 
     setData((prev: typeof data) => ({
@@ -630,9 +980,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reviews: data.reviews,
         favorites: data.favorites,
         notifications: authorizedNotifications,
+        refreshData,
         addCafe,
         updateCafe,
+        syncOwnerCafe,
         approveCafe,
+        rejectCafe,
         suspendCafe,
         addMenuItem,
         updateMenuItem,

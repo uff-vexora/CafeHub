@@ -27,6 +27,7 @@ import { AccountPage } from './pages/AccountPage';
 
 // Owner & Admin Dashboards
 import { OwnerDashboard } from './pages/owner/OwnerDashboard';
+import { OwnerOnboardingPage } from './pages/owner/OwnerOnboardingPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UserRole } from './types';
 
@@ -135,6 +136,7 @@ const AppContent: React.FC = () => {
         }
       >
         <Route path="/owner" element={<OwnerDashboard defaultTab="overview" />} />
+        <Route path="/owner/onboarding" element={<OwnerOnboardingPage />} />
         <Route path="/owner/orders" element={<OwnerDashboard defaultTab="orders" />} />
         <Route path="/owner/reservations" element={<OwnerDashboard defaultTab="reservations" />} />
         <Route path="/owner/menu" element={<OwnerDashboard defaultTab="menu" />} />

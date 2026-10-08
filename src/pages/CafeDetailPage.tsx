@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Star,
   MapPin,
@@ -10,7 +10,6 @@ import {
   Calendar,
   ShoppingBag,
   Navigation,
-  CheckCircle2,
   Wifi,
   Wind,
   Car,
@@ -20,7 +19,6 @@ import {
   Share2,
   Search,
   MessageSquare,
-  Sparkles,
   Coffee,
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
@@ -32,6 +30,13 @@ import { ReviewModal } from '../components/modals/ReviewModal';
 import { Badge, VegNonVegIndicator } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 import { AmenityKey, MenuItem } from '../types';
+import {
+  MagneticButton,
+  Reveal,
+  TiltCard,
+  ScrollScrubImage,
+  SectionOverlapBridge,
+} from '../components/motion';
 
 const AMENITY_ICONS: Record<AmenityKey, { icon: React.ReactNode; label: string }> = {
   wifi: { icon: <Wifi className="w-4 h-4" />, label: 'High-speed Wi-Fi' },
@@ -101,6 +106,24 @@ export const CafeDetailPage: React.FC = () => {
     );
   }
 
+  // Security: Only approved cafes are publicly accessible.
+  // Draft, pending, rejected, and suspended cafes can only be viewed by their owner or platform admins.
+  const isAuthorizedViewer = user?.role === 'admin' || (user?.role === 'cafe_owner' && cafe.owner_id === user?.id);
+  const isLive = cafe.is_approved && (!cafe.status || cafe.status === 'approved');
+
+  if (!isLive && !isAuthorizedViewer) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20">
+        <EmptyState
+          title="Cafe Currently Unavailable"
+          description="This cafe is currently under review or not publicly active on CafeHub."
+          actionText="Discover Active Cafes"
+          actionLink="/cafes"
+        />
+      </div>
+    );
+  }
+
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopiedLink(true);
@@ -110,23 +133,26 @@ export const CafeDetailPage: React.FC = () => {
   const imagesList = cafe.images && cafe.images.length > 0 ? cafe.images : [cafe.cover_image];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* 1. Top Image Gallery */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 lg:pb-8 space-y-8 animate-fade-up">
+      {/* 1. Top Image Gallery with 2.5D Layering */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Main Big Photo */}
-        <div className="lg:col-span-2 relative h-[360px] sm:h-[460px] rounded-3xl overflow-hidden shadow-warm bg-cream-200">
-          <img
+        {/* Main Big Photo with Continuous Scroll Scrub */}
+        <div className="lg:col-span-2 relative h-[360px] sm:h-[480px] rounded-3xl overflow-hidden shadow-warm-lg bg-cream-200">
+          <ScrollScrubImage
             src={imagesList[activePhotoIndex] || cafe.cover_image}
             alt={cafe.name}
-            className="w-full h-full object-cover transition-all duration-500"
+            startScale={1.12}
+            endScale={1.00}
+            translateYMax={32}
+            className="w-full h-full object-cover transition-opacity duration-500"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-espresso-950/70 via-transparent to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-espresso-950/80 via-espresso-950/20 to-transparent pointer-events-none" />
 
           {/* Quick Badges inside main photo */}
-          <div className="absolute top-4 left-4 flex gap-2">
+          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md shadow-sm ${
-                cafe.is_open ? 'bg-emerald-500/90 text-white' : 'bg-espresso-900/80 text-cream-200'
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-md shadow-sm ${
+                cafe.is_open ? 'bg-emerald-500/90 text-white shadow-emerald-900/20' : 'bg-espresso-900/80 text-cream-200'
               }`}
             >
               <span
@@ -136,128 +162,157 @@ export const CafeDetailPage: React.FC = () => {
               />
               {cafe.is_open ? 'Open Now' : 'Closed'}
             </span>
-            <span className="bg-espresso-950/70 text-white text-xs font-semibold px-3 py-1 rounded-full backdrop-blur-md">
+            <span className="bg-espresso-950/70 text-white text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10">
               {cafe.price_range}
+            </span>
+          </div>
+
+          {/* Photo indicator badge */}
+          <div className="absolute bottom-4 right-4 z-10">
+            <span className="glass-dark text-white text-xs font-medium px-3 py-1 rounded-full border border-white/15">
+              Photo {activePhotoIndex + 1} of {imagesList.length}
             </span>
           </div>
         </div>
 
         {/* Side Thumbnails */}
-        <div className="hidden lg:grid grid-rows-2 gap-4 h-[460px]">
+        <div className="hidden lg:grid grid-rows-2 gap-4 h-[480px]">
           {imagesList.slice(1, 3).map((img, idx) => (
             <div
               key={idx}
               onClick={() => setActivePhotoIndex(idx + 1)}
-              className="relative rounded-3xl overflow-hidden bg-cream-200 cursor-pointer group shadow-warm border border-cream-200"
+              className={`relative rounded-3xl overflow-hidden bg-cream-200 cursor-pointer group shadow-warm border transition-all duration-300 card-lift ${
+                activePhotoIndex === idx + 1
+                  ? 'border-terracotta-500 ring-2 ring-terracotta-500/30'
+                  : 'border-cream-200 hover:border-cream-300'
+              }`}
             >
               <img
                 src={img}
                 alt="Cafe ambient"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
+              <div className="absolute inset-0 bg-espresso-950/20 group-hover:bg-transparent transition-colors" />
             </div>
           ))}
           {imagesList.length < 3 && (
             <div
               onClick={() => setActivePhotoIndex(0)}
-              className="relative rounded-3xl overflow-hidden bg-cream-200 cursor-pointer group shadow-warm border border-cream-200"
+              className={`relative rounded-3xl overflow-hidden bg-cream-200 cursor-pointer group shadow-warm border transition-all duration-300 card-lift ${
+                activePhotoIndex === 0
+                  ? 'border-terracotta-500 ring-2 ring-terracotta-500/30'
+                  : 'border-cream-200 hover:border-cream-300'
+              }`}
             >
               <img
                 src={cafe.cover_image}
                 alt="Cafe ambient"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
             </div>
           )}
         </div>
       </div>
 
-      {/* 2. Cafe Header Section */}
-      <div className="bg-white rounded-3xl border border-cream-200 p-6 sm:p-8 shadow-warm flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-3 max-w-2xl">
-          <div className="flex flex-wrap items-center gap-2">
-            {cafe.categories.map((c) => (
-              <Badge key={c} variant="secondary">
-                {c}
-              </Badge>
-            ))}
+      {/* 2. Cafe Header Section with Spatial Overlap Bridge */}
+      <SectionOverlapBridge overlapDistance={-32} zIndex={20}>
+        <div className="bg-white rounded-3xl border border-cream-200 p-6 sm:p-8 shadow-warm-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6 card-lift">
+          <div className="space-y-3 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              {cafe.categories.map((c) => (
+                <Badge key={c} variant="secondary">
+                  {c}
+                </Badge>
+              ))}
+            </div>
+
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-serif font-bold text-espresso-950 leading-tight">
+                {cafe.name}
+              </h1>
+              {cafe.tagline && (
+                <p className="text-xs sm:text-sm text-coffee-600 mt-1 font-medium italic">
+                  "{cafe.tagline}"
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs text-coffee-600">
+              {/* Rating pill */}
+              <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1 rounded-xl border border-amber-200 text-amber-900 font-bold">
+                <Star className="w-4 h-4 fill-amber-500 text-amber-500 star-glow" />
+                <span className="text-sm">{cafe.rating}</span>
+                <span className="text-coffee-500 font-normal">({cafe.review_count} reviews)</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <MapPin className="w-4 h-4 text-terracotta-500 shrink-0" />
+                <span>{cafe.address}, {cafe.city}</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Clock className="w-4 h-4 text-coffee-500 shrink-0" />
+                <span>{cafe.opening_time} - {cafe.closing_time}</span>
+              </div>
+            </div>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl font-serif font-bold text-espresso-950 leading-tight">
-            {cafe.name}
-          </h1>
+          {/* Primary Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+            {/* Favorite Toggle */}
+            <button
+              onClick={() => toggleFavorite(cafe.id)}
+              className={`p-3 rounded-2xl border transition-all active:scale-90 ${
+                favorite
+                  ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm'
+                  : 'bg-cream-50 hover:bg-cream-100 border-cream-200 text-espresso-900'
+              }`}
+              title={favorite ? 'Remove Favorite' : 'Save Favorite'}
+            >
+              <Heart className={`w-5 h-5 ${favorite ? 'fill-rose-500' : ''}`} />
+            </button>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-coffee-600">
-            {/* Rating pill */}
-            <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 text-amber-900 font-bold">
-              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-              <span className="text-sm">{cafe.rating}</span>
-              <span className="text-coffee-500 font-normal">({cafe.review_count} reviews)</span>
-            </div>
+            {/* Share Button */}
+            <button
+              onClick={handleShare}
+              className="p-3 rounded-2xl bg-cream-50 hover:bg-cream-100 border border-cream-200 text-espresso-900 transition-colors relative active:scale-90"
+              title="Share Cafe"
+            >
+              <Share2 className="w-5 h-5" />
+              {copiedLink && (
+                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-espresso-950 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap animate-in fade-in">
+                  Link Copied!
+                </span>
+              )}
+            </button>
 
-            <div className="flex items-center gap-1">
-              <MapPin className="w-4 h-4 text-terracotta-500" />
-              <span>{cafe.address}, {cafe.city}</span>
-            </div>
+            {/* Book Table Button */}
+            <MagneticButton strength={5}>
+              <button
+                onClick={() => setIsBookingModalOpen(true)}
+                className="px-5 py-3 rounded-2xl bg-espresso-900 hover:bg-espresso-800 text-white text-xs sm:text-sm font-bold shadow-warm flex items-center gap-2 transition-all active:scale-95"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Book a Table</span>
+              </button>
+            </MagneticButton>
 
-            <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4 text-coffee-500" />
-              <span>{cafe.opening_time} - {cafe.closing_time}</span>
-            </div>
+            {/* Order Online Button */}
+            <MagneticButton strength={5}>
+              <button
+                onClick={() => setActiveTab('menu')}
+                className="px-5 py-3 rounded-2xl bg-terracotta-600 hover:bg-terracotta-500 text-white text-xs sm:text-sm font-bold shadow-glow-terra flex items-center gap-2 transition-all active:scale-95"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Order Online</span>
+              </button>
+            </MagneticButton>
           </div>
         </div>
-
-        {/* Primary Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-          {/* Favorite Toggle */}
-          <button
-            onClick={() => toggleFavorite(cafe.id)}
-            className={`p-3 rounded-2xl border transition-all ${
-              favorite
-                ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm'
-                : 'bg-cream-50 hover:bg-cream-100 border-cream-200 text-espresso-900'
-            }`}
-            title={favorite ? 'Remove Favorite' : 'Save Favorite'}
-          >
-            <Heart className={`w-5 h-5 ${favorite ? 'fill-rose-500' : ''}`} />
-          </button>
-
-          {/* Share Button */}
-          <button
-            onClick={handleShare}
-            className="p-3 rounded-2xl bg-cream-50 hover:bg-cream-100 border border-cream-200 text-espresso-900 transition-colors relative"
-            title="Share Cafe"
-          >
-            <Share2 className="w-5 h-5" />
-            {copiedLink && (
-              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-espresso-950 text-white text-[10px] py-1 px-2 rounded-md whitespace-nowrap animate-in fade-in">
-                Link Copied!
-              </span>
-            )}
-          </button>
-
-          {/* Book Table Button */}
-          <button
-            onClick={() => setIsBookingModalOpen(true)}
-            className="px-5 py-3 rounded-2xl bg-espresso-900 hover:bg-espresso-800 text-white text-xs sm:text-sm font-bold shadow-warm flex items-center gap-2 transition-all active:scale-95"
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Book a Table</span>
-          </button>
-
-          {/* Order Online Button */}
-          <button
-            onClick={() => setActiveTab('menu')}
-            className="px-5 py-3 rounded-2xl bg-terracotta-600 hover:bg-terracotta-500 text-white text-xs sm:text-sm font-bold shadow-warm flex items-center gap-2 transition-all active:scale-95"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Order Online</span>
-          </button>
-        </div>
-      </div>
+      </SectionOverlapBridge>
 
       {/* 3. Navigation Tabs */}
-      <div className="border-b border-cream-200 flex gap-6 overflow-x-auto no-scrollbar">
+      <div className="border-b border-cream-200 flex gap-4 sm:gap-6 overflow-x-auto no-scrollbar">
         {[
           { key: 'menu', label: 'Digital Menu' },
           { key: 'overview', label: 'Overview & Amenities' },
@@ -276,7 +331,7 @@ export const CafeDetailPage: React.FC = () => {
           >
             {tab.label}
             {activeTab === tab.key && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full shadow-glow-terra" />
             )}
           </button>
         ))}
@@ -346,13 +401,14 @@ export const CafeDetailPage: React.FC = () => {
             />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-              {filteredMenuItems.map((item) => (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  cafeName={cafe.name}
-                  onSelect={(item) => setSelectedMenuItem(item)}
-                />
+              {filteredMenuItems.map((item, index) => (
+                <Reveal key={item.id} variant="fade-up" delayMs={(index % 6) * 40} durationMs={450}>
+                  <MenuItemCard
+                    item={item}
+                    cafeName={cafe.name}
+                    onSelect={(item) => setSelectedMenuItem(item)}
+                  />
+                </Reveal>
               ))}
             </div>
           )}
@@ -460,13 +516,15 @@ export const CafeDetailPage: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={() => setIsReviewModalOpen(true)}
-              className="px-6 py-3 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-xs rounded-2xl shadow-warm flex items-center gap-2 transition-all active:scale-95"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Write a Review</span>
-            </button>
+            <MagneticButton strength={4}>
+              <button
+                onClick={() => setIsReviewModalOpen(true)}
+                className="px-6 py-3 bg-terracotta-600 hover:bg-terracotta-700 text-white font-bold text-xs rounded-2xl shadow-warm flex items-center gap-2 transition-all active:scale-95"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Write a Review</span>
+              </button>
+            </MagneticButton>
           </div>
 
           {/* Reviews List */}
@@ -479,11 +537,11 @@ export const CafeDetailPage: React.FC = () => {
                 onAction={() => setIsReviewModalOpen(true)}
               />
             ) : (
-              cafeReviews.map((rev) => (
-                <div
-                  key={rev.id}
-                  className="bg-white p-6 rounded-3xl border border-cream-200 shadow-warm space-y-4"
-                >
+              cafeReviews.map((rev, index) => (
+                <Reveal key={rev.id} variant="fade-up" delayMs={(index % 4) * 50} durationMs={450}>
+                  <div
+                    className="bg-white p-6 rounded-3xl border border-cream-200 shadow-warm space-y-4 card-lift"
+                  >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <img
@@ -528,7 +586,8 @@ export const CafeDetailPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ))
+              </Reveal>
+            ))
             )}
           </div>
         </div>
@@ -587,6 +646,27 @@ export const CafeDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Mobile Floating Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-cream-200 shadow-warm-xl flex items-center justify-between gap-3 z-40 lg:hidden">
+        <button
+          onClick={() => setIsBookingModalOpen(true)}
+          className="flex-1 py-3 px-4 rounded-2xl bg-cream-100 hover:bg-cream-200 text-espresso-950 font-bold text-xs flex items-center justify-center gap-2 border border-cream-200 transition-colors active:scale-95"
+        >
+          <Calendar className="w-4 h-4 text-terracotta-600" />
+          <span>Book Table</span>
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('menu');
+            window.scrollTo({ top: 500, behavior: 'smooth' });
+          }}
+          className="flex-1 py-3 px-4 rounded-2xl bg-terracotta-600 hover:bg-terracotta-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-glow-terra transition-colors active:scale-95"
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span>View Menu</span>
+        </button>
+      </div>
 
       {/* Modals */}
       <MenuItemModal

@@ -31,8 +31,8 @@ export const UnauthorizedPage: React.FC<UnauthorizedPageProps> = ({
   const userDashboard = user ? getRedirectPathForRole(user.role) : '/login';
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white p-8 sm:p-10 rounded-3xl border border-rose-200/80 shadow-warm-xl text-center space-y-6">
+    <div className="min-h-[80vh] flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8 animate-fade-up">
+      <div className="max-w-md w-full bg-white p-8 sm:p-10 rounded-3xl border border-rose-200/80 shadow-warm-xl text-center space-y-6 card-lift">
         {/* Security Shield Icon */}
         <div className="w-16 h-16 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600 mx-auto flex items-center justify-center shadow-xs">
           <ShieldAlert className="w-8 h-8" />

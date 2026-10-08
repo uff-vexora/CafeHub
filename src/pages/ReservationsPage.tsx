@@ -18,6 +18,11 @@ import { TableBookingModal } from '../components/modals/TableBookingModal';
 import { Badge } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 import { Cafe, Reservation } from '../types';
+import {
+  MagneticButton,
+  Reveal,
+  TiltCard,
+} from '../components/motion';
 
 export const ReservationsPage: React.FC = () => {
   const { reservations, cancelReservation, cafes } = useData();
@@ -40,19 +45,20 @@ export const ReservationsPage: React.FC = () => {
   const displayedList = activeTab === 'upcoming' ? upcomingReservations : pastReservations;
 
   const handleOpenBooking = (cafe?: Cafe) => {
-    setSelectedCafeForBooking(cafe || cafes[0]);
+    const defaultApprovedCafe = cafes.find((c) => c.is_approved && (!c.status || c.status === 'approved')) || null;
+    setSelectedCafeForBooking(cafe || defaultApprovedCafe);
     setIsModalOpen(true);
   };
 
-  const handleCancel = (resId: string) => {
+  const handleCancel = async (resId: string) => {
     const confirm = window.confirm('Are you sure you want to cancel this table reservation?');
     if (confirm) {
-      cancelReservation(resId);
+      await cancelReservation(resId);
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-cream-200">
         <div>
@@ -67,13 +73,15 @@ export const ReservationsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => handleOpenBooking()}
-          className="px-5 py-3 rounded-2xl bg-espresso-900 hover:bg-espresso-800 text-white font-bold text-xs sm:text-sm shadow-warm flex items-center gap-2 transition-all active:scale-95 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Book a New Table</span>
-        </button>
+        <MagneticButton strength={5} className="self-start sm:self-auto">
+          <button
+            onClick={() => handleOpenBooking()}
+            className="px-5 py-3 rounded-2xl bg-espresso-900 hover:bg-espresso-800 text-white font-bold text-xs sm:text-sm shadow-warm flex items-center gap-2 transition-all active:scale-95 card-lift"
+          >
+            <Plus className="w-4 h-4 text-terracotta-400" />
+            <span>Book a New Table</span>
+          </button>
+        </MagneticButton>
       </div>
 
       {/* Tabs */}
@@ -86,7 +94,7 @@ export const ReservationsPage: React.FC = () => {
         >
           Upcoming Bookings ({upcomingReservations.length})
           {activeTab === 'upcoming' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full shadow-glow-terra" />
           )}
         </button>
 
@@ -98,7 +106,7 @@ export const ReservationsPage: React.FC = () => {
         >
           Past & Cancelled ({pastReservations.length})
           {activeTab === 'past' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-terracotta-600 rounded-full shadow-glow-terra" />
           )}
         </button>
       </div>
@@ -118,11 +126,12 @@ export const ReservationsPage: React.FC = () => {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {displayedList.map((res) => (
-            <div
-              key={res.id}
-              className="bg-white rounded-3xl border border-cream-200 p-6 shadow-warm hover:shadow-warm-lg transition-all space-y-4"
-            >
+          {displayedList.map((res, index) => (
+            <Reveal key={res.id} variant="fade-up" delayMs={index * 60} durationMs={450}>
+              <TiltCard maxTiltDeg={2.5} className="h-full">
+                <div
+                  className="bg-white rounded-3xl border border-cream-200 p-6 shadow-warm hover:shadow-warm-lg transition-all space-y-4 card-lift h-full flex flex-col justify-between"
+                >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <img
@@ -197,15 +206,17 @@ export const ReservationsPage: React.FC = () => {
                       Cancel Booking
                     </button>
                   )}
-                  <Link
-                    to={`/cafes/${res.cafe_id}`}
-                    className="text-xs font-bold text-espresso-900 hover:text-terracotta-600 flex items-center gap-1"
-                  >
-                    View Cafe <ArrowRight className="w-3 h-3" />
-                  </Link>
+                    <Link
+                      to={`/cafes/${res.cafe_id}`}
+                      className="text-xs font-bold text-espresso-900 hover:text-terracotta-600 flex items-center gap-1"
+                    >
+                      View Cafe <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </div>
               </div>
-            </div>
+            </TiltCard>
+          </Reveal>
           ))}
         </div>
       )}

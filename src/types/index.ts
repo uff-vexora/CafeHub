@@ -1,5 +1,28 @@
 export type UserRole = 'customer' | 'cafe_owner' | 'admin';
 
+export type CafeStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'suspended';
+
+export interface CafeOpeningHours {
+  id?: string;
+  cafe_id: string;
+  day_of_week: number; // 0=Sunday, 6=Saturday
+  is_open: boolean;
+  open_time: string; // "09:00"
+  close_time: string; // "22:00"
+}
+
+export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+export const ALL_AMENITY_OPTIONS: { key: AmenityKey; label: string; icon: string }[] = [
+  { key: 'wifi', label: 'Free Wi-Fi', icon: '📶' },
+  { key: 'air_conditioning', label: 'Air Conditioning', icon: '❄️' },
+  { key: 'outdoor_seating', label: 'Outdoor Seating', icon: '🌿' },
+  { key: 'parking', label: 'Parking', icon: '🅿️' },
+  { key: 'pet_friendly', label: 'Pet Friendly', icon: '🐾' },
+  { key: 'power_outlets', label: 'Power Outlets', icon: '🔌' },
+  { key: 'work_friendly', label: 'Work Friendly', icon: '💻' },
+];
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -53,9 +76,22 @@ export interface Cafe {
   amenities: AmenityKey[];
   categories: string[];
   is_approved: boolean;
+  status?: CafeStatus;
+  logo_url?: string;
+  rejection_reason?: string;
+  submitted_at?: string;
+  approved_at?: string;
+  setup_progress?: number;
   is_featured: boolean;
   distance_km?: number;
   created_at: string;
+}
+
+export interface CafeAmenity {
+  id?: string;
+  cafe_id: string;
+  amenity_key: AmenityKey;
+  created_at?: string;
 }
 
 export interface MenuItemCustomization {
