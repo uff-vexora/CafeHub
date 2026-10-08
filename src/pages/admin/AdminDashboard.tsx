@@ -1,25 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Shield,
-  Users,
-  Store,
-  ShoppingBag,
-  Calendar,
-  MessageSquare,
-  BarChart3,
   CheckCircle,
   XCircle,
   Trash2,
-  DollarSign,
-  TrendingUp,
-  AlertTriangle,
-  Search,
-  Sliders,
   Check,
   Download,
-  Filter,
-  Eye,
-  FileText,
+  Calendar,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';

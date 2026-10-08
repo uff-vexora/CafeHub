@@ -4,20 +4,24 @@
 
 @layer base {
   :root {
-    --background: #FDFBF7;
-    --foreground: #1E140D;
-    --primary: #DE6441;
+    --background: #F9F6F0;
+    --foreground: #18100A;
+    --primary: #C2573B;
     --primary-foreground: #FFFFFF;
     --card: #FFFFFF;
-    --card-foreground: #1E140D;
-    --border: #EFE8DA;
-    --muted: #F7F3EA;
-    --muted-foreground: #78746D;
+    --card-foreground: #18100A;
+    --border: #E9DFC9;
+    --muted: #F3EDE2;
+    --muted-foreground: #6B4A30;
+    --espresso: #120B07;
+    --terracotta: #C2573B;
+    --caramel: #D9B064;
+    --sage: #5E896F;
   }
 
   body {
-    background-color: #FDFBF7;
-    color: #1E140D;
+    background-color: #F9F6F0;
+    color: #18100A;
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
@@ -31,37 +35,79 @@
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #F7F3EA; }
-::-webkit-scrollbar-thumb { background: #D2B699; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #B6916F; }
+::-webkit-scrollbar-track { background: #F3EDE2; }
+::-webkit-scrollbar-thumb { background: #C9A986; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #A9825F; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Glassmorphism */
+/* Living Glassmorphism */
 .glass-nav {
-  background: rgba(253, 251, 247, 0.85);
+  background: rgba(249, 246, 240, 0.88);
   backdrop-filter: blur(20px) saturate(1.8);
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
-  border-bottom: 1px solid rgba(239, 232, 218, 0.5);
+  border-bottom: 1px solid rgba(233, 223, 201, 0.75);
 }
 .glass-card {
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.90);
   backdrop-filter: blur(16px) saturate(1.6);
   -webkit-backdrop-filter: blur(16px) saturate(1.6);
-  border: 1px solid rgba(239, 232, 218, 0.7);
+  border: 1px solid rgba(233, 223, 201, 0.8);
 }
 .glass-dark {
-  background: rgba(20, 13, 8, 0.75);
+  background: rgba(18, 11, 7, 0.82);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .glass-terra {
-  background: rgba(222, 100, 65, 0.12);
+  background: rgba(194, 87, 59, 0.12);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(222, 100, 65, 0.2);
+  border: 1px solid rgba(194, 87, 59, 0.25);
 }
+
+/* Artisan Ceramic & Paper Textures */
+.texture-paper {
+  background-color: #F9F6F0;
+  background-image: radial-gradient(rgba(24, 16, 10, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.texture-roast {
+  background-color: #120B07;
+  background-image: radial-gradient(rgba(217, 176, 100, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Artisan Steam Simulation */
+@keyframes steamDrift1 {
+  0% { transform: translateY(0px) translateX(0px) scale(0.9); opacity: 0; }
+  25% { opacity: 0.75; transform: translateY(-16px) translateX(4px) scale(1.05); }
+  60% { opacity: 0.45; transform: translateY(-38px) translateX(-5px) scale(1.25); }
+  100% { opacity: 0; transform: translateY(-64px) translateX(8px) scale(1.5); }
+}
+@keyframes steamDrift2 {
+  0% { transform: translateY(0px) translateX(0px) scale(0.85); opacity: 0; }
+  30% { opacity: 0.65; transform: translateY(-20px) translateX(-6px) scale(1.1); }
+  70% { opacity: 0.35; transform: translateY(-46px) translateX(6px) scale(1.35); }
+  100% { opacity: 0; transform: translateY(-72px) translateX(-3px) scale(1.6); }
+}
+@keyframes steamDrift3 {
+  0% { transform: translateY(0px) translateX(0px) scale(0.95); opacity: 0; }
+  35% { opacity: 0.7; transform: translateY(-24px) translateX(3px) scale(1.15); }
+  75% { opacity: 0.4; transform: translateY(-52px) translateX(-4px) scale(1.4); }
+  100% { opacity: 0; transform: translateY(-80px) translateX(5px) scale(1.7); }
+}
+.animate-steam-1 { animation: steamDrift1 4.2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+.animate-steam-2 { animation: steamDrift2 4.8s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.4s; }
+.animate-steam-3 { animation: steamDrift3 5.4s cubic-bezier(0.4, 0, 0.2, 1) infinite 2.6s; }
+
+/* Bean Wobble & Drift */
+@keyframes beanDrift {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(4deg); }
+}
+.animate-bean-drift { animation: beanDrift 6s ease-in-out infinite; }
 
 /* 3D Card hover */
 .card-3d {

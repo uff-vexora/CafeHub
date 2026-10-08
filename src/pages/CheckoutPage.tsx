@@ -7,10 +7,8 @@ import {
   CheckCircle2,
   Sparkles,
   MapPin,
-  Clock,
   ArrowRight,
   ShieldCheck,
-  Coffee,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useCart } from '../context/CartContext';

@@ -91,6 +91,7 @@ export const Reveal: React.FC<RevealProps> = ({
     opacity: isVisible ? 1 : 0,
     transform: isVisible ? visibleTransform : hiddenTransform,
     clipPath: variant === 'clip-up' ? (isVisible ? visibleClip : hiddenClip) : undefined,
+    pointerEvents: isVisible ? undefined : 'none',
     transition: `opacity ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms, transform ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms, clip-path ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms`,
     willChange: isVisible ? 'auto' : 'opacity, transform',
   };

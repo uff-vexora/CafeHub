@@ -1,28 +1,13 @@
 import React, { useState } from 'react';
 import {
-  ShoppingBag,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ChefHat,
-  Bike,
-  Check,
   ChevronRight,
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
 import { EmptyState } from '../components/common/EmptyState';
-import { OrderStatus } from '../types';
 import { Reveal } from '../components/motion';
-
-const STATUS_STEPS: { key: OrderStatus; label: string; icon: React.ReactNode }[] = [
-  { key: 'order_placed', label: 'Order Placed', icon: <ShoppingBag className="w-4 h-4" /> },
-  { key: 'confirmed', label: 'Confirmed', icon: <Check className="w-4 h-4" /> },
-  { key: 'preparing', label: 'Preparing', icon: <ChefHat className="w-4 h-4" /> },
-  { key: 'ready', label: 'Ready', icon: <Bike className="w-4 h-4" /> },
-  { key: 'completed', label: 'Completed', icon: <CheckCircle2 className="w-4 h-4" /> },
-];
+import { VisualOrderStatusTracker } from '../components/cafe-world/VisualOrderStatusTracker';
 
 export const OrdersPage: React.FC = () => {
   const { orders } = useData();
@@ -34,11 +19,6 @@ export const OrdersPage: React.FC = () => {
 
   const activeOrder = userOrders.find((o) => o.id === selectedOrderId) || userOrders[0];
 
-  const getStepIndex = (status: OrderStatus) => {
-    if (status === 'cancelled') return -1;
-    return STATUS_STEPS.findIndex((s) => s.key === status);
-  };
-
   if (userOrders.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16">
@@ -47,13 +27,10 @@ export const OrdersPage: React.FC = () => {
           description="You haven't placed any orders yet. Discover delicious brews and fresh bakery items from nearby cafes."
           actionText="Find Cafes"
           actionLink="/cafes"
-          icon={<ShoppingBag className="w-8 h-8 text-terracotta-500" />}
         />
       </div>
     );
   }
-
-  const currentStep = activeOrder ? getStepIndex(activeOrder.status) : 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-up">
@@ -139,83 +116,12 @@ export const OrdersPage: React.FC = () => {
         {/* Right 2 Columns: Active Order Visual Progress & Details */}
         {activeOrder && (
           <div className="lg:col-span-2 space-y-6">
-            {/* Visual Progress Bar Card */}
-            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-cream-200 shadow-warm space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-cream-100">
-                <div>
-                  <span className="text-[11px] font-bold text-terracotta-600 uppercase tracking-wider">
-                    {activeOrder.order_type.replace('_', ' ')}
-                  </span>
-                  <h3 className="font-serif font-bold text-xl text-espresso-950 mt-0.5">
-                    Order #{activeOrder.order_number}
-                  </h3>
-                </div>
-              </div>
-
-              {/* Progress Indicator */}
-              {activeOrder.status === 'cancelled' ? (
-                <div className="p-4 bg-rose-50 text-rose-700 border border-rose-200 rounded-2xl text-xs flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5" />
-                  <span>This order was cancelled. A refund has been issued to the original payment source.</span>
-                </div>
-              ) : (
-                <div className="py-4">
-                  {/* Step bar */}
-                  <div className="relative flex items-center justify-between">
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-cream-200 w-full z-0" />
-                    <div
-                      className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-emerald-500 transition-all duration-500 z-0"
-                      style={{
-                        width: `${(currentStep / (STATUS_STEPS.length - 1)) * 100}%`,
-                      }}
-                    />
-
-                    {STATUS_STEPS.map((step, idx) => {
-                      const isCompleted = idx <= currentStep;
-                      const isCurrent = idx === currentStep;
-                      return (
-                        <div key={step.key} className="relative z-10 flex flex-col items-center">
-                          <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all shadow-sm ${
-                              isCompleted
-                                ? 'bg-emerald-500 text-white shadow-emerald-200'
-                                : 'bg-cream-100 text-coffee-400 border border-cream-300'
-                            } ${isCurrent ? 'ring-4 ring-emerald-300 scale-110 animate-pulse-glow' : ''}`}
-                          >
-                            {step.icon}
-                          </div>
-                          <span
-                            className={`text-[10px] sm:text-xs font-semibold mt-2 whitespace-nowrap ${
-                              isCurrent
-                                ? 'text-espresso-950 font-bold'
-                                : isCompleted
-                                ? 'text-emerald-700'
-                                : 'text-coffee-400'
-                            }`}
-                          >
-                            {step.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Estimated Arrival / Status Message */}
-              <div className="p-4 bg-cream-50 rounded-2xl border border-cream-200 flex items-center justify-between text-xs text-espresso-900">
-                <div className="flex items-center gap-2.5">
-                  <Clock className="w-4 h-4 text-terracotta-600" />
-                  <div>
-                    <span className="font-bold">Estimated Time: </span>
-                    <span>{activeOrder.estimated_time || '15-20 mins'}</span>
-                  </div>
-                </div>
-                <span className="font-semibold text-coffee-600">
-                  Status: {activeOrder.status.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
+            {/* Visual Living Kitchen / Barista Tracker */}
+            <VisualOrderStatusTracker
+              status={activeOrder.status}
+              orderNumber={activeOrder.order_number}
+              estimatedTime={activeOrder.estimated_time}
+            />
 
             {/* Items Breakdown Card */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl border border-cream-200 shadow-warm space-y-4">

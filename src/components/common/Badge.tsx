@@ -19,7 +19,7 @@ export const Badge: React.FC<BadgeProps> = ({
     success: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
     warning: 'bg-amber-50 text-amber-700 border border-amber-200',
     danger: 'bg-rose-50 text-rose-700 border border-rose-200',
-    outline: 'border border-[#E2D5C0] text-espresso-700 bg-transparent',
+    outline: 'border border-cream-200 text-espresso-700 bg-transparent',
     neutral: 'bg-cream-100 text-espresso-800 border border-cream-200',
   };
 

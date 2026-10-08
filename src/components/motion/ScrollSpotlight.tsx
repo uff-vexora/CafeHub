@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, MouseEvent } from 'react';
+import React, { useRef, useEffect, MouseEvent } from 'react';
 import { useReducedMotion, isTouchDevice } from './useReducedMotion';
 
 interface ScrollSpotlightProps {
@@ -17,31 +17,36 @@ export const ScrollSpotlight: React.FC<ScrollSpotlightProps> = ({
   opacity = 1,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [coords, setCoords] = useState<{ x: number; y: number; visible: boolean }>({
-    x: 0,
-    y: 0,
-    visible: false,
-  });
+  const spotlightRef = useRef<HTMLDivElement | null>(null);
   const reducedMotion = useReducedMotion();
-  const isTouch = useRef(false);
-
-  useEffect(() => {
-    isTouch.current = isTouchDevice();
-  }, []);
+  const rafId = useRef<number | null>(null);
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (reducedMotion || isTouch.current || !containerRef.current) return;
+    if (reducedMotion || isTouchDevice() || !containerRef.current || !spotlightRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    setCoords({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      visible: true,
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      if (!spotlightRef.current) return;
+      spotlightRef.current.style.opacity = `${opacity}`;
+      spotlightRef.current.style.background = `radial-gradient(${size}px circle at ${x}px ${y}px, ${color}, transparent 80%)`;
     });
   };
 
   const handleMouseLeave = () => {
-    setCoords((prev) => ({ ...prev, visible: false }));
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+    if (spotlightRef.current) {
+      spotlightRef.current.style.opacity = '0';
+    }
   };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
 
   return (
     <div
@@ -50,17 +55,14 @@ export const ScrollSpotlight: React.FC<ScrollSpotlightProps> = ({
       onMouseLeave={handleMouseLeave}
       className={`relative overflow-hidden ${className}`}
     >
-      {/* Dynamic ambient spotlight */}
-      {!reducedMotion && coords.visible && (
+      {/* Dynamic ambient spotlight overlay — zero React state re-renders */}
+      {!reducedMotion && (
         <div
-          className="pointer-events-none absolute -inset-px transition-opacity duration-500 ease-out z-0"
-          style={{
-            opacity: coords.visible ? opacity : 0,
-            background: `radial-gradient(${size}px circle at ${coords.x}px ${coords.y}px, ${color}, transparent 80%)`,
-          }}
+          ref={spotlightRef}
+          className="pointer-events-none absolute -inset-px transition-opacity duration-300 ease-out z-0 opacity-0"
         />
       )}
-      <div className="relative z-10">{children}</div>
+      <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
 };

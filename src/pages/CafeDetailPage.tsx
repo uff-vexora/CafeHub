@@ -33,10 +33,10 @@ import { AmenityKey, MenuItem } from '../types';
 import {
   MagneticButton,
   Reveal,
-  TiltCard,
   ScrollScrubImage,
   SectionOverlapBridge,
 } from '../components/motion';
+import { SteamEffect } from '../components/cafe-world/SteamEffect';
 
 const AMENITY_ICONS: Record<AmenityKey, { icon: React.ReactNode; label: string }> = {
   wifi: { icon: <Wifi className="w-4 h-4" />, label: 'High-speed Wi-Fi' },
@@ -173,6 +173,11 @@ export const CafeDetailPage: React.FC = () => {
               Photo {activePhotoIndex + 1} of {imagesList.length}
             </span>
           </div>
+
+          {/* Artisan Rising Steam Atmosphere */}
+          <div className="absolute bottom-12 left-10 pointer-events-none z-10 opacity-70 hidden sm:block">
+            <SteamEffect size="sm" opacity={0.6} />
+          </div>
         </div>
 
         {/* Side Thumbnails */}
@@ -215,7 +220,7 @@ export const CafeDetailPage: React.FC = () => {
       </div>
 
       {/* 2. Cafe Header Section with Spatial Overlap Bridge */}
-      <SectionOverlapBridge overlapDistance={-32} zIndex={20}>
+      <SectionOverlapBridge overlapDistance={-28} zIndex={20} parallaxSpeed={0}>
         <div className="bg-white rounded-3xl border border-cream-200 p-6 sm:p-8 shadow-warm-lg flex flex-col lg:flex-row lg:items-center justify-between gap-6 card-lift">
           <div className="space-y-3 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
@@ -258,7 +263,7 @@ export const CafeDetailPage: React.FC = () => {
           </div>
 
           {/* Primary Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 relative z-30">
             {/* Favorite Toggle */}
             <button
               onClick={() => toggleFavorite(cafe.id)}

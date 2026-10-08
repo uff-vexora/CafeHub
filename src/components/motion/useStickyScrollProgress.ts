@@ -42,15 +42,16 @@ export function useStickyScrollProgress<T extends HTMLElement = HTMLDivElement>(
         if (!el) return;
 
         const rect = el.getBoundingClientRect();
-        const totalScrollableDistance = rect.height - window.innerHeight;
+        const topOffset = 80; // matches top-20 navbar offset
+        const totalScrollableDistance = rect.height - (window.innerHeight - topOffset);
 
         if (totalScrollableDistance <= 0) {
           setProgress(0);
           return;
         }
 
-        // How much of the container has scrolled past the top of the viewport
-        const scrolled = -rect.top;
+        // How much of the container has scrolled past the sticky top threshold
+        const scrolled = topOffset - rect.top;
         const rawProgress = Math.max(0, Math.min(1, scrolled / totalScrollableDistance));
 
         // State update only when delta is noticeable to avoid wasted renders

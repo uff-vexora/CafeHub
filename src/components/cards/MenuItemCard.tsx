@@ -3,6 +3,7 @@ import { Plus, Check } from 'lucide-react';
 import { MenuItem } from '../../types';
 import { VegNonVegIndicator } from '../common/Badge';
 import { useCart } from '../../context/CartContext';
+import { triggerFlyToCart } from '../cafe-world/FlyToCartProxy';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -25,6 +26,11 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, cafeName, onSe
     } else {
       addToCart(item, 1, undefined, undefined, { id: item.cafe_id, name: cafeName || 'Cafe' });
       setJustAdded(true);
+
+      // Trigger decorative flying item proxy from click location
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      triggerFlyToCart(rect.left + rect.width / 2, rect.top, item.image_url);
+
       setTimeout(() => setJustAdded(false), 500);
     }
   };

@@ -13,12 +13,13 @@ export const SectionOverlapBridge: React.FC<SectionOverlapBridgeProps> = ({
   children,
   overlapDistance = -48,
   className = '',
-  parallaxSpeed = 0.08,
+  parallaxSpeed = 0,
   zIndex = 20,
 }) => {
   const [ref, offset] = useScrollParallax<HTMLDivElement>({
     speed: parallaxSpeed,
     clamp: [-40, 40],
+    disabled: parallaxSpeed === 0,
   });
 
   return (
@@ -26,9 +27,9 @@ export const SectionOverlapBridge: React.FC<SectionOverlapBridgeProps> = ({
       ref={ref}
       style={{
         marginTop: `${overlapDistance}px`,
-        transform: `translate3d(0, ${offset.toFixed(1)}px, 0)`,
+        transform: parallaxSpeed !== 0 ? `translate3d(0, ${offset.toFixed(1)}px, 0)` : undefined,
         zIndex,
-        willChange: 'transform',
+        willChange: parallaxSpeed !== 0 ? 'transform' : undefined,
       }}
       className={`relative ${className}`}
     >

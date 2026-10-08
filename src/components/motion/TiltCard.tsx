@@ -1,9 +1,9 @@
-import React, { useRef, useState, useEffect, MouseEvent } from 'react';
+import React, { useRef, useState, MouseEvent } from 'react';
 import { useReducedMotion, isTouchDevice } from './useReducedMotion';
 
 interface TiltCardProps {
   children: React.ReactNode;
-  maxTiltDeg?: number; // default 4 degrees (subtle, non-distracting)
+  maxTiltDeg?: number; // default 3 degrees (subtle, non-distracting)
   scale?: number; // default 1.015
   className?: string;
   sheen?: boolean; // specular highlight effect
@@ -11,7 +11,7 @@ interface TiltCardProps {
 
 export const TiltCard: React.FC<TiltCardProps> = ({
   children,
-  maxTiltDeg = 4,
+  maxTiltDeg = 3,
   scale = 1.015,
   className = '',
   sheen = true,
@@ -21,14 +21,15 @@ export const TiltCard: React.FC<TiltCardProps> = ({
   const [sheenPosition, setSheenPosition] = useState({ x: 50, y: 50, opacity: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const reducedMotion = useReducedMotion();
-  const isTouch = useRef(false);
+  const isTouch = isTouchDevice();
 
-  useEffect(() => {
-    isTouch.current = isTouchDevice();
-  }, []);
+  // If user prefers reduced motion or is on touch/mobile, render clean static container
+  if (reducedMotion || isTouch) {
+    return <div className={className}>{children}</div>;
+  }
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
-    if (reducedMotion || isTouch.current || !cardRef.current) return;
+    if (!cardRef.current) return;
 
     const rect = cardRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -47,13 +48,12 @@ export const TiltCard: React.FC<TiltCardProps> = ({
       setSheenPosition({
         x: (x / rect.width) * 100,
         y: (y / rect.height) * 100,
-        opacity: 0.15,
+        opacity: 0.12,
       });
     }
   };
 
   const handleMouseEnter = () => {
-    if (reducedMotion || isTouch.current) return;
     setIsHovered(true);
   };
 
@@ -65,9 +65,10 @@ export const TiltCard: React.FC<TiltCardProps> = ({
     }
   };
 
-  if (reducedMotion) {
-    return <div className={className}>{children}</div>;
-  }
+  // On mouse down / click, immediately stabilize card to neutral orientation
+  const handleMouseDown = () => {
+    setTransform({ rotateX: 0, rotateY: 0, scale: 1 });
+  };
 
   return (
     <div
@@ -75,31 +76,31 @@ export const TiltCard: React.FC<TiltCardProps> = ({
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
       style={{
         perspective: 1000,
-        transformStyle: 'preserve-3d',
       }}
       className={`relative ${className}`}
     >
       <div
         style={{
-          transform: `perspective(1000px) rotateX(${transform.rotateX}deg) rotateY(${transform.rotateY}deg) scale3d(${transform.scale}, ${transform.scale}, 1)`,
+          transform: `perspective(1000px) rotateX(${transform.rotateX.toFixed(2)}deg) rotateY(${transform.rotateY.toFixed(2)}deg) scale3d(${transform.scale}, ${transform.scale}, 1)`,
           transition: isHovered
             ? 'transform 0.15s cubic-bezier(0.2, 0.8, 0.4, 1)'
-            : 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            : 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
           willChange: isHovered ? 'transform' : 'auto',
         }}
         className="h-full w-full relative"
       >
         {children}
 
-        {/* Specular sheen overlay */}
+        {/* Specular sheen overlay (strictly pointer-events-none) */}
         {sheen && (
           <div
             className="absolute inset-0 pointer-events-none rounded-[inherit] transition-opacity duration-300 overflow-hidden"
             style={{
               opacity: sheenPosition.opacity,
-              background: `radial-gradient(circle 240px at ${sheenPosition.x}% ${sheenPosition.y}%, rgba(255,255,255,0.4) 0%, transparent 80%)`,
+              background: `radial-gradient(circle 240px at ${sheenPosition.x.toFixed(1)}% ${sheenPosition.y.toFixed(1)}%, rgba(255,255,255,0.35) 0%, transparent 80%)`,
             }}
           />
         )}

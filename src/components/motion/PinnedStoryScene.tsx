@@ -38,10 +38,10 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
     );
   }
 
-  // Phase Calculations (Desktop continuous scroll choreography)
+  // Phase Calculations (Desktop continuous scroll choreography over 160vh)
   // Phase 1: 0.0 - 0.38
   const phase1Opacity = Math.max(0, Math.min(1, 1 - progress * 2.8));
-  const phase1TranslateY = progress * -60;
+  const phase1TranslateY = progress * -50;
 
   // Phase 2: 0.28 - 0.72 (Peaks at 0.50)
   const phase2Progress = Math.max(0, Math.min(1, (progress - 0.28) / 0.22));
@@ -52,22 +52,36 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
   // Phase 3: 0.65 - 1.0 (Peaks toward end)
   const phase3Progress = Math.max(0, Math.min(1, (progress - 0.65) / 0.25));
   const phase3Opacity = phase3Progress;
-  const phase3TranslateY = (1 - phase3Progress) * 40;
+  const phase3TranslateY = (1 - phase3Progress) * 35;
 
   // Background Image Scale & Depth Scrub (Continuous across all phases)
-  const bgImageScale = 1.18 - progress * 0.16; // 1.18 -> 1.02
-  const bgImageTranslateY = progress * -40; // Parallax translation
-  const overlayDarkness = 0.55 + progress * 0.25; // Darkens subtly for contrast
+  const bgImageScale = 1.16 - progress * 0.14; // 1.16 -> 1.02
+  const bgImageTranslateY = progress * -35;
+  const overlayDarkness = 0.55 + progress * 0.25;
+
+  const handleExplore = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onExploreClick) {
+      onExploreClick();
+    } else {
+      const el = document.getElementById('directory-grid');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[230vh] -mt-2 mb-10"
+      className="relative w-full h-[160vh] -mt-2 mb-8"
       style={{ perspective: 1200 }}
     >
       {/* Viewport Anchored Sticky Stage */}
-      <div className="sticky top-16 h-[calc(100vh-5rem)] rounded-4xl overflow-hidden shadow-glow-espresso border border-white/10 hero-mesh-dark flex items-center justify-center">
-        
+      <div
+        className={`sticky top-20 h-[calc(100vh-5.5rem)] rounded-4xl overflow-hidden shadow-glow-espresso border border-white/10 hero-mesh-dark flex items-center justify-center ${
+          progress >= 0.98 ? 'pointer-events-none' : ''
+        }`}
+      >
         {/* Continuous Scrub Background Imagery */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <img
@@ -81,15 +95,15 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
           />
           {/* Dynamic dark scrim linked to scrub */}
           <div
-            className="absolute inset-0 transition-opacity duration-75"
+            className="absolute inset-0 transition-opacity duration-75 pointer-events-none"
             style={{
               background: `radial-gradient(ellipse 90% 70% at 50% 50%, rgba(20, 13, 8, ${overlayDarkness.toFixed(2)}) 0%, rgba(20, 13, 8, 0.95) 100%)`,
             }}
           />
         </div>
 
-        {/* Storytelling Progress Indicator Pill */}
-        <div className="absolute top-6 left-8 z-30 flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark border border-white/10 text-xs font-semibold text-cream-200">
+        {/* Storytelling Progress Indicator Pill (strictly pointer-events-none) */}
+        <div className="absolute top-6 left-8 z-30 flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-dark border border-white/10 text-xs font-semibold text-cream-200 pointer-events-none select-none">
           <span className="w-2 h-2 rounded-full bg-terracotta-500 animate-pulse" />
           <span>Curated Journey</span>
           <span className="text-cream-200/40">•</span>
@@ -98,22 +112,21 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
           </span>
         </div>
 
-        {/* Scroll Progress Bar at Top of Sticky Viewport */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-30">
+        {/* Scroll Progress Bar at Top of Sticky Viewport (strictly pointer-events-none) */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-white/10 z-30 pointer-events-none">
           <div
             className="h-full bg-gradient-to-r from-terracotta-500 to-amber-500 transition-all duration-75"
             style={{ width: `${(progress * 100).toFixed(1)}%` }}
           />
         </div>
 
-        {/* ── SCENE 1: THE ORIGIN STATEMENT ───────────────────────── */}
+        {/* ── SCENE 1: THE ORIGIN STATEMENT (strictly pointer-events-none) ───── */}
         <div
           style={{
             opacity: phase1Opacity.toFixed(3),
             transform: `translate3d(0, ${phase1TranslateY.toFixed(1)}px, 0)`,
-            pointerEvents: progress > 0.4 ? 'none' : 'auto',
           }}
-          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-4xl mx-auto space-y-5"
+          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-4xl mx-auto space-y-5 pointer-events-none select-none"
         >
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
             <Coffee className="w-3.5 h-3.5" />
@@ -135,14 +148,13 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
           </div>
         </div>
 
-        {/* ── SCENE 2: THE SPATIAL SANCTUARY ───────────────────────── */}
+        {/* ── SCENE 2: THE SPATIAL SANCTUARY (strictly pointer-events-none) ───── */}
         <div
           style={{
             opacity: phase2Opacity.toFixed(3),
             transform: `scale3d(${phase2Scale.toFixed(3)}, ${phase2Scale.toFixed(3)}, 1)`,
-            pointerEvents: progress < 0.28 || progress > 0.72 ? 'none' : 'auto',
           }}
-          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-3xl mx-auto space-y-6"
+          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-3xl mx-auto space-y-6 pointer-events-none select-none"
         >
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
             <Sparkles className="w-3.5 h-3.5" />
@@ -176,33 +188,36 @@ export const PinnedStoryScene: React.FC<PinnedStorySceneProps> = ({
           style={{
             opacity: phase3Opacity.toFixed(3),
             transform: `translate3d(0, ${phase3TranslateY.toFixed(1)}px, 0)`,
-            pointerEvents: progress < 0.65 ? 'none' : 'auto',
           }}
-          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-3xl mx-auto space-y-6"
+          className="absolute inset-0 flex flex-col justify-center items-center text-center px-6 sm:px-12 z-20 max-w-3xl mx-auto space-y-6 pointer-events-none"
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30 select-none">
             <Compass className="w-3.5 h-3.5" />
             <span>Chapter III · Begin Discovery</span>
           </div>
 
-          <h2 className="text-4xl sm:text-6xl font-serif font-bold text-white tracking-tight leading-[1.12]">
+          <h2 className="text-4xl sm:text-6xl font-serif font-bold text-white tracking-tight leading-[1.12] select-none">
             {totalCafesCount} Verified Havens.<br />
             <span className="text-gradient-cream">Ready For You.</span>
           </h2>
 
-          <p className="text-sm sm:text-base text-cream-200/80 max-w-md font-light leading-relaxed">
+          <p className="text-sm sm:text-base text-cream-200/80 max-w-md font-light leading-relaxed select-none">
             Discover detailed pour-over menus, reserve tables with instant confirmation, and support local roasters.
           </p>
 
-          <MagneticButton strength={6}>
-            <button
-              onClick={onExploreClick}
-              className="py-3.5 px-8 bg-gradient-to-r from-terracotta-600 to-terracotta-700 hover:from-terracotta-700 hover:to-terracotta-800 text-white text-sm font-bold rounded-2xl shadow-glow-terra flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
-            >
-              <span>Explore The Directory Below</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </MagneticButton>
+          {/* Actionable CTA: Only this button has pointer-events-auto */}
+          <div className={`transition-opacity duration-200 ${progress >= 0.65 ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}>
+            <MagneticButton strength={4}>
+              <button
+                onClick={handleExplore}
+                type="button"
+                className="py-3.5 px-8 bg-gradient-to-r from-terracotta-600 to-terracotta-700 hover:from-terracotta-700 hover:to-terracotta-800 text-white text-sm font-bold rounded-2xl shadow-glow-terra flex items-center gap-2 transition-transform active:scale-95 cursor-pointer"
+              >
+                <span>Explore The Directory Below</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </MagneticButton>
+          </div>
         </div>
 
       </div>

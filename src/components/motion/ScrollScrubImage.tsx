@@ -36,28 +36,24 @@ export const ScrollScrubImage: React.FC<ScrollScrubImageProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden ${containerClassName}`}
+      className={`relative overflow-hidden w-full h-full ${containerClassName}`}
     >
       <img
         src={src}
         alt={alt}
         style={{
           transform: `scale3d(${currentScale.toFixed(3)}, ${currentScale.toFixed(3)}, 1) translate3d(0, ${currentTranslateY.toFixed(1)}px, 0)`,
-          transition: 'transform 0.08s linear',
           willChange: 'transform',
         }}
-        className={`w-full h-full object-cover select-none ${className}`}
-        loading="lazy"
+        className={`w-full h-full object-cover transition-transform duration-75 ${className}`}
       />
-
       {overlayGradient && (
         <div
           className="absolute inset-0 pointer-events-none"
           style={{ background: overlayGradient }}
         />
       )}
-
-      {children && <div className="absolute inset-0 z-10">{children}</div>}
+      {children}
     </div>
   );
 };

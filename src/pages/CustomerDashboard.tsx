@@ -25,6 +25,7 @@ import {
   Reveal,
   SectionOverlapBridge,
 } from '../components/motion';
+import { CoffeeCupHero, AmbientDustParticles, FloatingCoffeeBean } from '../components/cafe-world';
 
 const TIME_OF_DAY = () => {
   const h = new Date().getHours();
@@ -105,7 +106,7 @@ export const CustomerDashboard: React.FC = () => {
         <ScrollSpotlight
           size={420}
           color="rgba(222, 100, 65, 0.16)"
-          className="rounded-4xl hero-mesh-dark shadow-glow-espresso border border-white/10"
+          className="rounded-4xl hero-mesh-dark shadow-glow-espresso border border-white/10 relative overflow-hidden"
         >
           {/* Depth Parallax Ambient Background Elements */}
           <ParallaxLayer depth="background" className="absolute -top-10 -right-10 w-96 h-96 pointer-events-none">
@@ -116,14 +117,30 @@ export const CustomerDashboard: React.FC = () => {
             <div className="w-full h-full rounded-full bg-caramel-400/15 blur-3xl ambient-glow" style={{ animationDelay: '2.5s' }} />
           </ParallaxLayer>
 
+          <AmbientDustParticles count={10} />
+
           <div className="stripe-pattern absolute inset-0 pointer-events-none opacity-40" />
+
+          {/* Living Coffee Cup in background right corner */}
+          <div className="absolute right-6 sm:right-12 top-1/2 -translate-y-1/2 w-64 sm:w-80 pointer-events-none opacity-40 lg:opacity-75 hidden sm:block">
+            <CoffeeCupHero
+              scrollRotation={4}
+              scrollScale={0.88}
+              showSteam={true}
+            />
+          </div>
+
+          {/* Floating Bean accent */}
+          <div className="absolute top-8 right-1/3 hidden lg:block pointer-events-none">
+            <FloatingCoffeeBean size={32} rotation={-18} depth="far" delayMs={400} />
+          </div>
 
           {/* Content Composition with Spatial Depth */}
           <div className="relative z-10 p-7 sm:p-12 flex flex-col md:flex-row md:items-center justify-between gap-8">
             <div className="space-y-4 max-w-xl">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                Customer Portal & Discovery
+                <Sparkles className="w-3.5 h-3.5 animate-pulse text-caramel-400" />
+                <span>Customer Sanctuary & Home</span>
               </div>
 
               <h1 className="text-3xl sm:text-5xl font-serif font-bold text-white leading-[1.15] tracking-tight">
@@ -131,14 +148,14 @@ export const CustomerDashboard: React.FC = () => {
                 <span className="text-gradient-cream">{firstName}!</span>
               </h1>
 
-              <p className="text-sm sm:text-base text-cream-200/75 leading-relaxed font-light">
-                Discover artisan roasters, track your active barista brews, and reserve premium tables with seamless spatial ease.
+              <p className="text-sm sm:text-base text-cream-200/80 leading-relaxed font-light">
+                What can we brew or plate for you today? Discover hand-roasted espresso, track your live barista bar, or secure a prime cafe table.
               </p>
             </div>
 
             {/* Magnetic CTA Group */}
-            <div className="flex flex-wrap items-center gap-3.5">
-              <MagneticButton strength={6}>
+            <div className="flex flex-wrap items-center gap-3.5 relative z-30">
+              <MagneticButton strength={4}>
                 <Link
                   to="/cafes"
                   className="py-3.5 px-7 bg-gradient-to-r from-terracotta-600 to-terracotta-700 hover:from-terracotta-700 hover:to-terracotta-800 text-white text-sm font-bold rounded-2xl shadow-glow-terra transition-all flex items-center gap-2 active:scale-95 group"
@@ -163,7 +180,7 @@ export const CustomerDashboard: React.FC = () => {
       </Reveal>
 
       {/* ── STAT CARDS (3D TILT + NUMBER TICKER + SPATIAL OVERLAP) ────────────────────── */}
-      <SectionOverlapBridge overlapDistance={-28} zIndex={20}>
+      <SectionOverlapBridge overlapDistance={-16} zIndex={10} parallaxSpeed={0}>
         <Reveal variant="fade-up" delayMs={100}>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {statCards.map((card, i) => (

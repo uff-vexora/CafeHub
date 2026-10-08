@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Search,
   MapPin,
   SlidersHorizontal,
   X,
@@ -13,16 +12,15 @@ import {
 import { useData } from '../context/DataContext';
 import { CafeCard } from '../components/cards/CafeCard';
 import { EmptyState } from '../components/common/EmptyState';
-import { AmenityKey, Cafe } from '../types';
+import { AmenityKey } from '../types';
 import { CITIES } from '../components/layout/Navbar';
 import {
-  ScrollSpotlight,
-  ParallaxLayer,
   TiltCard,
   Reveal,
   PinnedStoryScene,
   SectionOverlapBridge,
 } from '../components/motion';
+import { LivingCafeHero, ObjectJourneyTrack } from '../components/cafe-world';
 
 const AMENITY_LABELS: Record<AmenityKey, string> = {
   wifi: 'Fast Wi-Fi',
@@ -323,80 +321,20 @@ export const DiscoveryPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-7 animate-fade-up">
 
-      {/* ── CINEMATIC DISCOVERY HERO ─────────────────────────── */}
+      {/* ── LIVING CINEMATIC HERO WORLD ─────────────────────────── */}
       <Reveal variant="scale-in" durationMs={650}>
-        <ScrollSpotlight
-          size={420}
-          color="rgba(222, 100, 65, 0.16)"
-          className="rounded-4xl hero-mesh-dark shadow-glow-espresso border border-white/10"
-        >
-          <ParallaxLayer depth="background" className="absolute top-0 left-1/4 w-80 h-80 pointer-events-none">
-            <div className="w-full h-full rounded-full bg-terracotta-500/20 blur-3xl ambient-glow" />
-          </ParallaxLayer>
-
-          <ParallaxLayer depth="background" className="absolute bottom-0 right-1/4 w-60 h-60 pointer-events-none">
-            <div className="w-full h-full rounded-full bg-caramel-400/15 blur-3xl ambient-glow" style={{ animationDelay: '2s' }} />
-          </ParallaxLayer>
-
-          <div className="stripe-pattern absolute inset-0 pointer-events-none opacity-40" />
-
-          <div className="relative z-10 px-7 sm:px-10 py-8 sm:py-10 space-y-6">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-terra text-terracotta-300 text-xs font-bold border border-terracotta-500/30">
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                {filteredCafes.length} Verified Artisan Cafes
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5">
-              <div>
-                <h1 className="text-3xl sm:text-5xl font-serif font-bold text-white leading-[1.15] tracking-tight">
-                  Discover Your<br />
-                  <span className="text-gradient-cream">Perfect Cafe</span>
-                </h1>
-                <p className="text-sm sm:text-base text-cream-200/70 mt-2 max-w-md font-light leading-relaxed">
-                  Specialty roasters, artisan espresso bars & quiet work sanctuaries — curated across India.
-                </p>
-              </div>
-
-              {/* Search bar inside hero */}
-              <div className="relative sm:w-96 flex-shrink-0">
-                <Search className="w-4 h-4 text-cream-200/50 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cafe name, city, latte art..."
-                  className="w-full glass-dark text-white placeholder:text-cream-200/40 rounded-2xl pl-11 pr-10 py-3 text-sm outline-none focus:border-terracotta-400 border border-white/10 focus:border-opacity-100 transition-all shadow-inner"
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                    <X className="w-4 h-4 text-cream-200/60 hover:text-white" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Category pills */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
-              {CATEGORIES.slice(0, 8).map((cat, i) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  style={{ animationDelay: `${i * 40}ms` }}
-                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                    selectedCategory === cat
-                      ? 'bg-terracotta-600 text-white border-terracotta-500 shadow-glow-terra scale-105'
-                      : 'glass-dark text-cream-200/70 border-white/10 hover:border-white/25 hover:text-white'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-        </ScrollSpotlight>
+        <LivingCafeHero
+          totalCafesCount={filteredCafes.length}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedCategory={selectedCategory}
+          onCategorySelect={setSelectedCategory}
+          categories={CATEGORIES}
+        />
       </Reveal>
+
+      {/* ── INTER-SECTION OBJECT JOURNEY BRIDGE ────────────────── */}
+      <ObjectJourneyTrack />
 
       {/* ── PINNED CINEMATIC STORY SCENE ───────────────────────── */}
       <PinnedStoryScene
@@ -408,7 +346,7 @@ export const DiscoveryPage: React.FC = () => {
 
       {/* ── TOOLBAR / CONTROLS WITH OVERLAPPING BRIDGE ───────── */}
       <div id="directory-grid" className="scroll-mt-24">
-        <SectionOverlapBridge overlapDistance={-28} parallaxSpeed={0.06}>
+        <SectionOverlapBridge overlapDistance={-20} parallaxSpeed={0}>
           <div className="bg-white p-4 sm:p-5 rounded-3xl border border-cream-200 shadow-warm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         {/* Quick Location & Status info */}
         <div className="flex items-center gap-3">
